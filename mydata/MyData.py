@@ -10,7 +10,8 @@ import argparse
 from datetime import datetime
 
 import CommitDef
-import MyDataVersionNumber
+
+import MyDataVersionNumber as MyDataVersionNumber
 from FoldersView import FoldersView
 from FoldersModel import FoldersModel
 from FoldersController import FoldersController
@@ -22,11 +23,9 @@ from VerificationsView import VerificationsView
 from VerificationsModel import VerificationsModel
 from UploadsView import UploadsView
 from UploadsModel import UploadsModel
-from UploaderModel import UploaderModel
 from LogView import LogView
 from SettingsModel import SettingsModel
 from SettingsDialog import SettingsDialog
-from Exceptions import NoActiveNetworkInterface
 from Exceptions import InvalidFolderStructure
 from EnhancedStatusBar import EnhancedStatusBar
 from logger.Logger import logger
@@ -35,7 +34,7 @@ from MyDataProgressDialog import MyDataProgressDialog
 import MyDataEvents as mde
 
 
-class NotebookTabs:
+class NotebookTabs(object):
     FOLDERS = 0
     USERS = 1
     GROUPS = 2
@@ -45,8 +44,8 @@ class NotebookTabs:
 
 class MyDataFrame(wx.Frame):
 
-    def __init__(self, parent, id, title, style, settingsModel):
-        wx.Frame.__init__(self, parent, id, title, style=style)
+    def __init__(self, parent, frame_id, title, style, settingsModel):
+        wx.Frame.__init__(self, parent, frame_id, title, style=style)
         self.settingsModel = settingsModel
         self.SetSize(wx.Size(1000, 600))
         self.statusbar = EnhancedStatusBar(self, wx.ID_ANY)
