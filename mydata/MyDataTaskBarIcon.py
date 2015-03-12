@@ -5,6 +5,7 @@ import webbrowser
 
 
 class MyDataTaskBarIcon(wx.TaskBarIcon):
+
     def __init__(self, frame, settingsModel):
         """Constructor"""
         wx.TaskBarIcon.__init__(self)
@@ -35,25 +36,31 @@ class MyDataTaskBarIcon(wx.TaskBarIcon):
     def CreatePopupMenu(self):
         self.menu = wx.Menu()
 
-        self.myTardisSyncMenuItem = wx.MenuItem(self.menu, wx.NewId(), "MyTardis Sync")
+        self.myTardisSyncMenuItem = wx.MenuItem(
+            self.menu, wx.NewId(), "MyTardis Sync")
         self.menu.AppendItem(self.myTardisSyncMenuItem)
-        self.Bind(wx.EVT_MENU, self.OnMyTardisSync, self.myTardisSyncMenuItem, self.myTardisSyncMenuItem.GetId())
+        self.Bind(wx.EVT_MENU, self.OnMyTardisSync,
+                  self.myTardisSyncMenuItem, self.myTardisSyncMenuItem.GetId())
 
         self.menu.AppendSeparator()
 
-        self.myTardisControlPanelMenuItem = wx.MenuItem(self.menu, wx.NewId(), "MyData Control Panel")
+        self.myTardisControlPanelMenuItem = wx.MenuItem(
+            self.menu, wx.NewId(), "MyData Control Panel")
         self.menu.AppendItem(self.myTardisControlPanelMenuItem)
-        self.Bind(wx.EVT_MENU, self.OnMyDataControlPanel, self.myTardisControlPanelMenuItem)
+        self.Bind(wx.EVT_MENU, self.OnMyDataControlPanel,
+                  self.myTardisControlPanelMenuItem)
 
         self.menu.AppendSeparator()
 
-        self.myTardisHelpMenuItem = wx.MenuItem(self.menu, wx.NewId(), "MyData Help")
+        self.myTardisHelpMenuItem = wx.MenuItem(
+            self.menu, wx.NewId(), "MyData Help")
         self.menu.AppendItem(self.myTardisHelpMenuItem)
         self.Bind(wx.EVT_MENU, self.OnMyDataHelp, self.myTardisHelpMenuItem)
 
         self.menu.AppendSeparator()
 
-        self.exitMyDataMenuItem = wx.MenuItem(self.menu, wx.NewId(), "Exit MyData")
+        self.exitMyDataMenuItem = wx.MenuItem(
+            self.menu, wx.NewId(), "Exit MyData")
         self.menu.AppendItem(self.exitMyDataMenuItem)
         self.Bind(wx.EVT_MENU, self.OnExit, self.exitMyDataMenuItem)
 
@@ -79,7 +86,7 @@ class MyDataTaskBarIcon(wx.TaskBarIcon):
 
     def OnExit(self, event):
         message = "Are you sure you want to close MyData?\n\n" \
-            "Any uploads currently in progress will be terminated immediately." 
+            "Any uploads currently in progress will be terminated immediately."
         confirmationDialog = \
             wx.MessageDialog(None, message, "MyData",
                              wx.YES | wx.NO | wx.ICON_QUESTION)

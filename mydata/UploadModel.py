@@ -15,6 +15,7 @@ class UploadStatus:
 
 
 class UploadModel():
+
     def __init__(self, dataViewId, folderModel, dataFileIndex):
         self.dataViewId = dataViewId
         self.folderModel = folderModel
@@ -191,7 +192,7 @@ class UploadModel():
         return self.retries
 
     def IncrementRetries(self):
-        self.retries += 1 
+        self.retries += 1
 
     def GetMaxRetries(self):
         return 5  # FIXME: Magic number

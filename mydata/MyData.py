@@ -44,6 +44,7 @@ class NotebookTabs:
 
 
 class MyDataFrame(wx.Frame):
+
     def __init__(self, parent, id, title, style, settingsModel):
         wx.Frame.__init__(self, parent, id, title, style=style)
         self.settingsModel = settingsModel
@@ -113,6 +114,7 @@ class MyDataFrame(wx.Frame):
 
 
 class MyData(wx.App):
+
     def __init__(self, name):
         self.name = name
         wx.App.__init__(self, redirect=False)
@@ -189,7 +191,8 @@ class MyData(wx.App):
             self.Bind(wx.EVT_MENU, self.OnHelp, id=helpMenuItemID)
 
             walkthroughMenuItemID = wx.NewId()
-            self.helpMenu.Append(walkthroughMenuItemID, "Mac OS X &Walkthrough")
+            self.helpMenu.Append(
+                walkthroughMenuItemID, "Mac OS X &Walkthrough")
             self.Bind(wx.EVT_MENU, self.OnWalkthrough,
                       id=walkthroughMenuItemID)
 
