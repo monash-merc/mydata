@@ -1,8 +1,22 @@
+
+.. _mydata-settings-dialog:
+
 Settings
 ========
 
+MyData's Settings dialog can be opened by clicking on the |settings| icon on
+MyData's toolbar.  The Settings dialog will be automatically displayed each
+time MyData is launched, unless MyData is run in "--background" mode
+(which is the default for the MyData shortcut installed in the "Startup"
+folder on Windows if the appropriate checkbox is ticked in MyData's setup
+wizard).
+
+.. |settings| image:: images/Settings.png
+
+
 General
 ^^^^^^^
+
   .. image:: images/SettingsGeneral.PNG
 
 **Instrument Name**
@@ -53,8 +67,12 @@ General
 
   .. image:: images/DownloadApiKey.png
 
+
+.. _settings-dialog-advanced:
+
 Advanced
 ^^^^^^^^
+
   .. image:: images/SettingsAdvanced.PNG
 
 **Folder Structure - Username / Dataset**
@@ -130,6 +148,14 @@ Advanced
     (e.g. "D:\\Data\\SmithLab\\Nikon Microscope #1\\John Smith\\Dataset1")
     will be mapped to MyTardis datasets.
 
+**Check For Missing Folders**
+  This option provides extra validation of the folder structure.  For example,
+  if you choose a folder structure of "Username / Dataset" but you don't have
+  any Dataset folders, then when this checkbox is ticked, MyData's settings
+  validation will stop and display an error as shown below.
+
+  .. image:: images/CheckForMissingFolders.png
+
 **Experiment (Dataset Grouping)**
   Defines how datasets will be grouped together into experiments in MyTardis.
   Currently, this field is automatically populated when you select a folder
@@ -148,3 +174,78 @@ Advanced
   to use an existing data directory containing a large backlog of old data, it
   is advisable to instruct MyData to ignore old datasets so that it focus on
   uploading the recent datasets.
+
+**Max # of upload threads**
+  The maximum number of uploads to perform concurrently.  If greater than one,
+  MyData will spawn multiple scp (secure copy) processes which (for large
+  datafiles) may impact significantly on CPU usage of your system, which could
+  affect other applications running alongside MyData.  The default value is 5.
+
+
+Locking and Unlocking MyData's Settings
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+At the bottom of MyData's Setting dialog is a Lock/Unlock button, whose label
+toggles between "Lock" and "Unlock" depending on whether the Settings dialog's
+fields are editable or read-only.  When the Settings dialog's fields are
+editable, clicking the "Lock" button will make them read-only, preventing any
+further changes to MyData's settings until an administrator has unlocked the
+settings.  The locked status will persist after closing and relaunching MyData.
+
+Clicking the "Lock" button displays the confirmation dialog below.
+
+  .. image:: images/LockSettingsConfirmation.PNG
+
+Once MyData's settings are locked, all of the fields in the Settings dialog
+will become read-only.
+
+  .. image:: images/SettingsLocked.PNG
+
+Clicking on the "Unlock" button will result in a request for administrator
+privileges.
+
+  .. image:: images/UACElevation.PNG
+
+Once administrator privileges have been verified, it will be possible to modify
+MyData's settings again.
+
+N.B. This is NOT a security mechanism - it is a mechanism for preventing the
+accidental modification of settings in a production workflow.  It does not
+prevent advanced users from determining where MyData saves its last used
+configuration to disk (e.g.
+C:\\Users\\jsmith\\AppData\\Local\\Monash University\\MyData\\MyData.cfg) and
+updating the settings outside of MyData.
+
+
+Saving and Loading Settings
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Each time you click OK on the Settings Dialog, your settings are validated, and
+then saved automatically to a location within your user home folder, which is
+OS-dependent, e.g.
+"C:\\Users\\jsmith\\AppData\\Local\\Monash University\\MyData\\MyData.cfg" or
+"/Users/jsmith/Library/Application Support/MyData/MyData.cfg".
+
+The settings file is in plain-text file whose format is described here:
+https://docs.python.org/2/library/configparser.html.  An example can be
+found here:
+`MyDataDemo.cfg <https://github.com/monash-merc/mydata-sample-data/releases/download/v0.1/MyDataDemo.cfg>`_.
+
+Any facilities with potentially malicious users may wish to consider what
+happens if a user gets hold of an API key for a facility role account, saved
+in a MyData configuration file.  The API key cannot be used in place of a
+password to log into MyTardis's web interface, but it can be used with
+MyTardis's RESTful API to gain facility manager privileges.  These privileges
+would not include deleting data, but for a technically minded user familiar
+with RESTful APIs, the API key could potentially be used to modify another
+user's data.  Facilities need to decide whether this is an acceptable risk.
+Many facilities already use shared accounts on data-collection PCs, so the
+risk of one user modifying another user's data subdirectory is already there.
+
+Settings can be saved to an arbitrary location chosen by the user by clicking
+Control-s (Windows) or Command-s (Mac OS X) from MyData's Settings dialog,
+keeping in mind the risks stated above.  A saved settings file can then be
+dragged and dropped onto MyData's settings dialog to import the settings.
+This feature is currently used primarily by MyData developers for testing
+different configurations.  It is expected that the MyData settings for each
+individual instrument PC will remain constant once the initial configuration
+is done.
+

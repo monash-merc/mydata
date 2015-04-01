@@ -6,6 +6,7 @@ import threading
 from datetime import datetime
 import sys
 import os
+import traceback
 
 from logger.Logger import logger
 from SettingsModel import SettingsModel
@@ -186,7 +187,7 @@ class SettingsDialog(wx.Dialog):
         generalPanelSize = self.generalPanel.GetSize()
         self.settingsTabsNotebook.AddPage(self.generalPanel, "General")
 
-        self.advancedPanelSizer = wx.FlexGridSizer(rows=5, cols=4,
+        self.advancedPanelSizer = wx.FlexGridSizer(rows=7, cols=3,
                                                    vgap=5, hgap=5)
         self.advancedPanel.SetSizer(self.advancedPanelSizer)
         # self.advancedPanelSizer.AddGrowableCol(1)
@@ -195,7 +196,6 @@ class SettingsDialog(wx.Dialog):
         # has 4 columns, so we'll add 4 units of blank space.  We don't
         # care about the width (so we use -1), but we choose a height of
         # 5px (plus the FlexGridSizer's default vgap).
-        self.advancedPanelSizer.Add(wx.Size(-1, 5))
         self.advancedPanelSizer.Add(wx.Size(-1, 5))
         self.advancedPanelSizer.Add(wx.Size(-1, 5))
         self.advancedPanelSizer.Add(wx.Size(-1, 5))
@@ -221,6 +221,17 @@ class SettingsDialog(wx.Dialog):
                                     flag=wx.EXPAND | wx.ALL, border=5)
         self.advancedPanelSizer.Add(wx.StaticText(self.advancedPanel,
                                                   wx.ID_ANY, ""))
+
+        checkForMissingFoldersLabel = \
+            wx.StaticText(self.advancedPanel, wx.ID_ANY,
+                          "Check for missing folders:")
+        self.advancedPanelSizer.Add(checkForMissingFoldersLabel,
+                                    flag=wx.ALIGN_RIGHT | wx.ALL, border=5)
+        self.checkForMissingFoldersCheckBox = \
+            wx.CheckBox(self.advancedPanel, wx.ID_ANY, "")
+        self.advancedPanelSizer\
+            .Add(self.checkForMissingFoldersCheckBox,
+                 flag=wx.EXPAND | wx.ALL, border=5)
         self.advancedPanelSizer.Add(wx.StaticText(self.advancedPanel,
                                                   wx.ID_ANY, ""))
 
@@ -236,9 +247,7 @@ class SettingsDialog(wx.Dialog):
         self.advancedPanelSizer.Add(self.datasetGroupingField,
                                     flag=wx.EXPAND | wx.ALL, border=5)
         self.advancedPanelSizer.Add(wx.StaticText(self.advancedPanel,
-                                                  wx.ID_ANY, ""))
-        self.advancedPanelSizer.Add(wx.StaticText(self.advancedPanel,
-                                                  wx.ID_ANY, ""))
+                                                  wx.ID_ANY, "        "))
 
         self.groupPrefixLabel = wx.StaticText(self.advancedPanel, wx.ID_ANY,
                                               "User Group Prefix:")
@@ -247,8 +256,6 @@ class SettingsDialog(wx.Dialog):
         self.groupPrefixField = wx.TextCtrl(self.advancedPanel, wx.ID_ANY, "")
         self.advancedPanelSizer.Add(self.groupPrefixField,
                                     flag=wx.EXPAND | wx.ALL, border=5)
-        self.advancedPanelSizer.Add(wx.StaticText(self.advancedPanel,
-                                                  wx.ID_ANY, ""))
         self.advancedPanelSizer.Add(wx.StaticText(self.advancedPanel,
                                                   wx.ID_ANY, ""))
 
@@ -286,8 +293,23 @@ class SettingsDialog(wx.Dialog):
                                     border=5)
         self.advancedPanelSizer.Add(wx.StaticText(self.advancedPanel,
                                                   wx.ID_ANY, ""))
-        self.advancedPanelSizer.Add(wx.StaticText(self.advancedPanel,
-                                                  wx.ID_ANY, ""))
+
+        maxUploadThreadsLabel = wx.StaticText(self.advancedPanel, wx.ID_ANY,
+                                              "Maximum # of upload threads:")
+        self.advancedPanelSizer.Add(maxUploadThreadsLabel,
+                                    flag=wx.ALIGN_RIGHT | wx.ALL, border=5)
+
+        self.maxUploadThreadsPanel = wx.Panel(self.advancedPanel)
+        self.maxUploadThreadsPanelSizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.maxUploadThreadsPanel.SetSizer(self.maxUploadThreadsPanelSizer)
+
+        self.maximumUploadThreadsSpinCtrl = \
+            wx.SpinCtrl(self.maxUploadThreadsPanel, wx.ID_ANY,
+                        "5", min=1, max=99)
+        self.maxUploadThreadsPanelSizer.Add(self.maximumUploadThreadsSpinCtrl,
+                                            flag=wx.EXPAND | wx.ALL, border=5)
+        self.advancedPanelSizer.Add(self.maxUploadThreadsPanel,
+                                    flag=wx.EXPAND, border=5)
 
         self.advancedPanel.Fit()
         self.settingsTabsNotebook.AddPage(self.advancedPanel, "Advanced")
@@ -311,6 +333,13 @@ class SettingsDialog(wx.Dialog):
 
         self.helpButton = wx.Button(self, wx.ID_HELP, "Help")
         buttonSizer.AddButton(self.helpButton)
+
+        # We need to use one of the standard IDs recognized by
+        # StdDialogSizer:
+        self.lockOrUnlockButton = wx.Button(self, wx.ID_APPLY, "Lock")
+        buttonSizer.AddButton(self.lockOrUnlockButton)
+        self.Bind(wx.EVT_BUTTON, self.OnLockOrUnlockSettings,
+                  self.lockOrUnlockButton)
 
         self.cancelButton = wx.Button(self, wx.ID_CANCEL, "Cancel")
         buttonSizer.AddButton(self.cancelButton)
@@ -409,6 +438,12 @@ class SettingsDialog(wx.Dialog):
     def SetGroupPrefix(self, groupPrefix):
         self.groupPrefixField.SetValue(groupPrefix)
 
+    def CheckForMissingFolders(self):
+        return self.checkForMissingFoldersCheckBox.GetValue()
+
+    def SetCheckForMissingFolders(self, checkForMissingFolders):
+        self.checkForMissingFoldersCheckBox.SetValue(checkForMissingFolders)
+
     def IgnoreOldDatasets(self):
         return self.ignoreDatasetsOlderThanCheckBox.GetValue()
 
@@ -428,6 +463,31 @@ class SettingsDialog(wx.Dialog):
 
     def SetIgnoreOldDatasetIntervalUnit(self, ignoreOldDatasetIntervalUnit):
         self.intervalUnitsComboBox.SetValue(ignoreOldDatasetIntervalUnit)
+
+    def GetMaxUploadThreads(self):
+        return self.maximumUploadThreadsSpinCtrl.GetValue()
+
+    def SetMaxUploadThreads(self, numberOfThreads):
+        self.maximumUploadThreadsSpinCtrl.SetValue(numberOfThreads)
+
+    def Locked(self):
+        return self.lockOrUnlockButton.GetLabel() == "Unlock"
+
+    def SetLocked(self, locked):
+        """
+        When SettingsDialog is first displayed, it is in the unlocked
+        state, so the button label says "Lock" (allowing the user to
+        switch to the locked state).  When MyData reads the saved
+        settings from disk, if it finds that settings were saved in
+        the locked state, it will lock (disable) all of the dialog's
+        fields.
+        """
+        if locked:
+            self.DisableFields()
+            self.lockOrUnlockButton.SetLabel("Unlock")
+        else:
+            self.EnableFields()
+            self.lockOrUnlockButton.SetLabel("Lock")
 
     def OnCancel(self, event):
         self.EndModal(wx.ID_CANCEL)
@@ -506,6 +566,9 @@ class SettingsDialog(wx.Dialog):
             self.showingSingularUnits = True
         self.SetIgnoreOldDatasetIntervalUnit(
             settingsModel.GetIgnoreOldDatasetIntervalUnit())
+        self.SetMaxUploadThreads(settingsModel.GetMaxUploadThreads())
+        self.SetCheckForMissingFolders(settingsModel.CheckForMissingFolders())
+        self.SetLocked(settingsModel.Locked())
 
     def OnPaste(self, event):
         textCtrl = wx.Window.FindFocus()
@@ -527,9 +590,8 @@ class SettingsDialog(wx.Dialog):
         mydataConfigPath = self.settingsModel.GetConfigPath()
         if mydataConfigPath is not None:
             dlg = wx.FileDialog(wx.GetApp().GetMainFrame(),
-                                "Save MyData configuration as...",
-                                os.path.dirname(mydataConfigPath),
-                                "MyData.cfg", "*.cfg",
+                                "Save MyData configuration as...", "",
+                                "%s.cfg" % self.GetInstrumentName(), "*.cfg",
                                 wx.SAVE | wx.OVERWRITE_PROMPT)
             if dlg.ShowModal() == wx.ID_OK:
                 configPath = dlg.GetPath()
@@ -589,8 +651,8 @@ class SettingsDialog(wx.Dialog):
     def OnHelp(self, event):
         wx.BeginBusyCursor()
         import webbrowser
-        webbrowser.open(
-            "http://mydata.readthedocs.org/en/latest/settings.html")
+        webbrowser\
+            .open("http://mydata.readthedocs.org/en/latest/settings.html")
         wx.EndBusyCursor()
 
     def OnSelectFolderStructure(self, event):
@@ -615,6 +677,14 @@ class SettingsDialog(wx.Dialog):
             self.groupPrefixField.Show(True)
 
     def OnDropFiles(self, filepaths):
+        if self.Locked():
+            message = \
+                "Please unlock MyData's settings before importing " \
+                "a configuration file."
+            dlg = wx.MessageDialog(None, message, "MyData - Settings Locked",
+                                   wx.OK | wx.ICON_INFORMATION)
+            dlg.ShowModal()
+            return
         self.settingsModel.SetConfigPath(filepaths[0])
         self.settingsModel.LoadSettings()
         self.UpdateFieldsFromModel(self.settingsModel)
@@ -627,3 +697,84 @@ class SettingsDialog(wx.Dialog):
         else:
             self.groupPrefixLabel.Show(False)
             self.groupPrefixField.Show(False)
+
+    def OnLockOrUnlockSettings(self, event):
+        if self.lockOrUnlockButton.GetLabel() == "Lock":
+            message = "Once settings have been locked, only an administrator " \
+                "will be able to unlock them.\n\n" \
+                "Are you sure you want to lock MyData's settings?"
+            confirmationDialog = \
+                wx.MessageDialog(None, message, "MyData - Lock Settings",
+                                 wx.YES | wx.NO | wx.ICON_QUESTION)
+            okToLock = confirmationDialog.ShowModal()
+            if okToLock != wx.ID_YES:
+                return
+            lockingSettings = True
+            unlockingSettings = False
+            logger.debug("Locking settings.")
+            self.lockOrUnlockButton.SetLabel("Unlock")
+        else:
+            lockingSettings = False
+            unlockingSettings = True
+            logger.debug("Requesting privilege elevation and "
+                         "unlocking settings.")
+            if sys.platform.startswith("win"):
+                import win32com.shell.shell as shell
+                import win32con
+                from win32com.shell import shellcon
+                import ctypes
+                runningAsAdmin = ctypes.windll.shell32.IsUserAnAdmin()
+                params = "--version "
+
+                if not runningAsAdmin:
+                    logger.info("Attempting to run \"%s --version\" "
+                                "as an administrator." % sys.executable)
+                    try:
+                        procInfo = shell.ShellExecuteEx(
+                            nShow=win32con.SW_SHOWNORMAL,
+                            fMask=shellcon.SEE_MASK_NOCLOSEPROCESS,
+                            lpVerb='runas',
+                            lpFile=sys.executable,
+                            lpParameters=params)
+                        procHandle = procInfo['hProcess']
+                    except:
+                        logger.error("User privilege elevation failed.")
+                        logger.debug(traceback.format_exc())
+                        return
+            elif sys.platform.startswith("darwin"):
+                logger.info("Attempting to run "
+                            "\"echo MyData privilege elevation\" "
+                            "as an administrator.")
+                returncode = os.system("osascript -e "
+                                       "'do shell script "
+                                       "\"echo MyData privilege elevation\" "
+                                       "with administrator privileges'")
+                if returncode != 0:
+                    raise Exception("Failed to get admin privileges.")
+            self.lockOrUnlockButton.SetLabel("Lock")
+
+        self.EnableFields(unlockingSettings)
+
+    def EnableFields(self, enabled=True):
+        self.instrumentNameField.Enable(enabled)
+        self.facilityNameField.Enable(enabled)
+        self.contactNameField.Enable(enabled)
+        self.contactEmailField.Enable(enabled)
+        self.dataDirectoryField.Enable(enabled)
+        self.browseDataDirectoryButton.Enable(enabled)
+        self.myTardisUrlField.Enable(enabled)
+        self.usernameField.Enable(enabled)
+        self.apiKeyField.Enable(enabled)
+        self.folderStructureComboBox.Enable(enabled)
+        self.datasetGroupingField.Enable(enabled)
+        self.groupPrefixField.Enable(enabled)
+        self.checkForMissingFoldersCheckBox.Enable(enabled)
+        self.ignoreDatasetsOlderThanCheckBox.Enable(enabled)
+        self.ignoreDatasetsOlderThanSpinCtrl\
+            .Enable(enabled)
+        self.intervalUnitsComboBox.Enable(enabled)
+        self.maximumUploadThreadsSpinCtrl.Enable(enabled)
+        self.Update()
+
+    def DisableFields(self):
+        self.EnableFields(False)

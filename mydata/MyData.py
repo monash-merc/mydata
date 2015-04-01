@@ -10,8 +10,7 @@ import argparse
 from datetime import datetime
 
 import CommitDef
-
-import MyDataVersionNumber as MyDataVersionNumber
+import MyDataVersionNumber
 from FoldersView import FoldersView
 from FoldersModel import FoldersModel
 from FoldersController import FoldersController
@@ -23,9 +22,11 @@ from VerificationsView import VerificationsView
 from VerificationsModel import VerificationsModel
 from UploadsView import UploadsView
 from UploadsModel import UploadsModel
+from UploaderModel import UploaderModel
 from LogView import LogView
 from SettingsModel import SettingsModel
 from SettingsDialog import SettingsDialog
+from Exceptions import NoActiveNetworkInterface
 from Exceptions import InvalidFolderStructure
 from EnhancedStatusBar import EnhancedStatusBar
 from logger.Logger import logger
@@ -34,7 +35,7 @@ from MyDataProgressDialog import MyDataProgressDialog
 import MyDataEvents as mde
 
 
-class NotebookTabs(object):
+class NotebookTabs:
     FOLDERS = 0
     USERS = 1
     GROUPS = 2
@@ -44,8 +45,8 @@ class NotebookTabs(object):
 
 class MyDataFrame(wx.Frame):
 
-    def __init__(self, parent, frame_id, title, style, settingsModel):
-        wx.Frame.__init__(self, parent, frame_id, title, style=style)
+    def __init__(self, parent, id, title, style, settingsModel):
+        wx.Frame.__init__(self, parent, id, title, style=style)
         self.settingsModel = settingsModel
         self.SetSize(wx.Size(1000, 600))
         self.statusbar = EnhancedStatusBar(self, wx.ID_ANY)
@@ -152,10 +153,31 @@ class MyData(wx.App):
 
         parser = argparse.ArgumentParser()
         parser.add_argument("-b", "--background", action="store_true",
-                            help="run non-interactively")
+                            help="Run non-interactively")
+        parser.add_argument("-v", "--version", action="store_true",
+                            help="Display MyData version and exit")
         # parser.add_argument("--loglevel", help="set logging verbosity")
         args, unknown = parser.parse_known_args()
+        if args.version:
+            print "MyData %s" % MyDataVersionNumber.versionNumber
+            os._exit(0)
+        args, unknown = parser.parse_known_args()
         self.settingsModel.SetBackgroundMode(args.background)
+
+        # Using wx.SingleInstanceChecker to check whether MyData is already
+        # running.
+        # Running MyData --version is allowed when MyData is already running,
+        # in fact this is used by calls to ShellExecuteEx to test user
+        # privilege elevation on Windows.
+        # A workaround for the 'Deleted stale lock file' issue with
+        # SingleInstanceChecker on Mac OS X is to lower the wx logging level.
+        # MyData doesn't use wx.Log
+        wx.Log.SetLogLevel(wx.LOG_Error)
+        self.instance = wx.SingleInstanceChecker(self.name, path=appdirPath)
+        if self.instance.IsAnotherRunning():
+            wx.MessageBox("MyData is already running!", "MyData",
+                          wx.ICON_ERROR)
+            return False
 
         if sys.platform.startswith("darwin"):
             # On Mac OS X, adding an Edit menu seems to help with
@@ -190,8 +212,8 @@ class MyData(wx.App):
             self.Bind(wx.EVT_MENU, self.OnHelp, id=helpMenuItemID)
 
             walkthroughMenuItemID = wx.NewId()
-            self.helpMenu.Append(
-                walkthroughMenuItemID, "Mac OS X &Walkthrough")
+            self.helpMenu.Append(walkthroughMenuItemID,
+                                 "Mac OS X &Walkthrough")
             self.Bind(wx.EVT_MENU, self.OnWalkthrough,
                       id=walkthroughMenuItemID)
 
@@ -233,8 +255,8 @@ class MyData(wx.App):
 
         self.foldersUsersNotebook = \
             wx.aui.AuiNotebook(self.panel,
-                               style=wx.aui.AUI_NB_TOP
-                               | wx.aui.AUI_NB_SCROLL_BUTTONS)
+                               style=wx.aui.AUI_NB_TOP |
+                               wx.aui.AUI_NB_SCROLL_BUTTONS)
         self.Bind(wx.aui.EVT_AUINOTEBOOK_PAGE_CHANGING,
                   self.OnNotebookPageChanging, self.foldersUsersNotebook)
 
@@ -351,9 +373,16 @@ class MyData(wx.App):
             self.frame.Show()  # See: http://trac.wxwidgets.org/ticket/10426
             self.frame.Hide()
         else:
-            message = "Are you sure you want to close MyData?\n\n" \
-                "MyData will attempt to shut down any uploads currently in " \
-                "progress before exiting."
+            started = self.foldersController.Started()
+            completed = self.foldersController.Completed()
+            canceled = self.foldersController.Canceled()
+            failed = self.foldersController.Failed()
+
+            message = "Are you sure you want to close MyData?"
+            if started and not completed and not canceled and not failed:
+                message += "\n\n" \
+                    "MyData will attempt to shut down any uploads currently " \
+                    "in progress before exiting."
             confirmationDialog = \
                 wx.MessageDialog(None, message, "MyData",
                                  wx.YES | wx.NO | wx.ICON_QUESTION)
@@ -365,10 +394,6 @@ class MyData(wx.App):
                     try:
                         wx.CallAfter(wx.BeginBusyCursor)
                         self.foldersController.ShutDownUploadThreads()
-                        wx.PostEvent(
-                            self.frame,
-                            self.ShutdownForRefreshCompleteEvent(
-                                shutdownSuccessful=True))
 
                         def endBusyCursorIfRequired():
                             try:
@@ -646,8 +671,9 @@ class MyData(wx.App):
 
                     self.settingsValidation = self.settingsModel.Validate()
                     settingsValidationForRefreshCompleteEvent = \
-                        mde.MyDataEvent(mde.EVT_SETTINGS_VALIDATION_FOR_REFRESH_COMPLETE,
-                                        needToValidateSettings=False)
+                        mde.MyDataEvent(
+                            mde.EVT_SETTINGS_VALIDATION_FOR_REFRESH_COMPLETE,
+                            needToValidateSettings=False)
                     wx.PostEvent(self.frame,
                                  settingsValidationForRefreshCompleteEvent)
 

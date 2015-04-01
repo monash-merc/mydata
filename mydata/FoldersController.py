@@ -124,6 +124,15 @@ class FoldersController():
         self.notifyWindow.Bind(eventBinder,
                                self.CountCompletedUploadsAndVerifications)
 
+    def Started(self):
+        if hasattr(self, "started"):
+            return self.started
+        else:
+            return False
+
+    def SetStarted(self, started=True):
+        self.started = started
+
     def Canceled(self):
         return self.canceled.isSet()
 
@@ -143,7 +152,10 @@ class FoldersController():
             self.failed.clear()
 
     def Completed(self):
-        return self.completed
+        if hasattr(self, "completed"):
+            return self.completed
+        else:
+            return False
 
     def SetCompleted(self, completed=True):
         self.completed = completed
@@ -249,13 +261,15 @@ class FoldersController():
 
     def StartDataUploads(self):
         fc = self
+        fc.SetStarted()
         settingsModel = fc.settingsModel
         fc.canceled.clear()
         fc.verificationsModel.DeleteAllRows()
         fc.verifyDatafileRunnable = {}
         fc.verificationsQueue = Queue.Queue()
-        # FIXME: Number of verify threads should be configurable
-        fc.numVerificationWorkerThreads = 5
+        # For now, the max number of verification threads is set to be the
+        # same as the max number of upload threads.
+        fc.numVerificationWorkerThreads = settingsModel.GetMaxUploadThreads()
         fc.verificationWorkerThreads = []
 
         for i in range(fc.numVerificationWorkerThreads):
@@ -267,8 +281,7 @@ class FoldersController():
             t.start()
         fc.uploadDatafileRunnable = {}
         fc.uploadsQueue = Queue.Queue()
-        # FIXME: Number of upload threads should be configurable
-        fc.numUploadWorkerThreads = 5
+        fc.numUploadWorkerThreads = settingsModel.GetMaxUploadThreads()
         fc.uploadMethod = UploadMethod.HTTP_POST
 
         settingsModel.GetUploaderModel().RequestStagingAccess()
@@ -475,19 +488,6 @@ class FoldersController():
         Check if we have finished uploads and verifications,
         and if so, call ShutDownUploadThreads
         """
-        numFilesFoundVerified = self.verificationsModel.GetFoundVerifiedCount()
-        numFilesNotFound = self.verificationsModel.GetNotFoundCount()
-        numFilesFoundUnverifiedFullSize = \
-            self.verificationsModel.GetFoundUnverifiedFullSizeCount()
-        numFilesFoundUnverifiedNotFullSize = \
-            self.verificationsModel.GetFoundUnverifiedNotFullSizeCount()
-
-        numVerificationsProcessed = \
-            numFilesFoundVerified + \
-            numFilesNotFound + \
-            numFilesFoundUnverifiedFullSize + \
-            numFilesFoundUnverifiedNotFullSize
-
         numVerificationsCompleted = self.verificationsModel.GetCompletedCount()
 
         uploadsToBePerformed = self.uploadsModel.GetRowCount()
@@ -707,7 +707,7 @@ class FoldersController():
         md5 = hashlib.md5()
 
         defaultChunkSize = 128 * 1024  # FIXME: magic number
-        maxChunkSize = 256 * 1024 * 1024  # FIXME: magic number
+        maxChunkSize = 64 * 1024 * 1024  # FIXME: magic number
         chunkSize = defaultChunkSize
         # FIXME: magic number (approximately 50 progress bar increments)
         while (fileSize / chunkSize) > 50 and chunkSize < maxChunkSize:
@@ -724,6 +724,7 @@ class FoldersController():
                     return None
                 md5.update(chunk)
                 bytesProcessed += len(chunk)
+                del chunk
                 if ProgressCallback:
                     ProgressCallback(bytesProcessed)
         return md5.hexdigest()
