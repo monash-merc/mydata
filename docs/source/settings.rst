@@ -98,10 +98,25 @@ Schedule
     menu.
 
 **Schedule type - On startup**
-    On Windows, a shortcut to MyData (configured to run in background mode)
-    will be placed in the current user's Startup Items folder.  An alternative
-    method of running MyData on startup, which doesn't require any user to be
-    logged in, is currently in development.
+    On Windows, a shortcut to MyData (configured to run in --background mode)
+    will be placed in the current user's Startup folder.  The exact location
+    varies, but on my machine it is
+    "C:\\Users\\wettenhj\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup".
+    If MyData is installed as a service (not yet possible), then upon selecting
+    "Startup" for the Schedule Type, MyData will request administrator
+    privileges to ensure that the MyData service is configured to start up
+    automatically.  If MyData is installed as a service, then the shortcut to
+    MyData required to launch MyData's user interface will be placed in the
+    common Startup folder.  Again, the location varies, but for me it is:
+    "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Startup".
+    In the case where MyData runs as a service, MyData's settings will be
+    saved in a central location (e.g. "C:\\ProgramData\\Monash\\MyData" or
+    "C:\\Users\\All Users\\AppDir\\Local\\Monash\\MyData" (the latter is a
+    symbolic link to the former on my machine), rather than being stored in one
+    specific user's account.  MyData's user interface will run as a regular
+    user.  If it detects that the MyData service is running, then it will
+    automatically run in client mode, and leave all of the heavy lifting to the
+    MyData service.
 
 .. _settings-dialog-advanced:
 
