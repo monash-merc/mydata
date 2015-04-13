@@ -68,6 +68,41 @@ General
   .. image:: images/DownloadApiKey.png
 
 
+.. _settings-dialog-schedule:
+
+Schedule
+^^^^^^^^
+
+  .. image:: images/SettingsSchedule.PNG
+
+**Schedule type - Once**
+    Run the folder scans and uploads once, on the date specified by the Date
+    field and at the time specified by the Time field.
+
+**Schedule type - Daily**
+    Run the folder scans and uploads every day, at the time specified by the
+    Time field.
+
+**Schedule type - Weekly**
+    Run the folder scans and uploads every week on the day(s) specified by the
+    weekday checkboxes, at the time specified by the Time field.
+
+**Schedule type - Timer**
+    Run the folder scans and uploads repeatedly with an interval specified by
+    the "Timer (minutes)" field between the hours of "From" and "To", every day.
+
+**Schedule type - Manually**
+    Only run the folder scans and uploads in response to user interaction -
+    either clicking OK on the Settings Dialog, or clicking the Refresh icon on
+    the toolbar, or clicking the "MyTardis Sync" menu item in the system tray
+    menu.
+
+**Schedule type - On startup**
+    On Windows, a shortcut to MyData (configured to run in background mode)
+    will be placed in the current user's Startup Items folder.  An alternative
+    method of running MyData on startup, which doesn't require any user to be
+    logged in, is currently in development.
+
 .. _settings-dialog-advanced:
 
 Advanced
