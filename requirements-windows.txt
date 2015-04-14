@@ -25,6 +25,7 @@ https://pypi.python.org/pypi/poster/
 https://pypi.python.org/pypi/psutil/
 https://pypi.python.org/pypi/requests/
 https://pypi.python.org/pypi/validate_email/
+https://pypi.python.org/pypi/python-memcached/
 
 # If you want to build a local copy of the HTML docs, rather than just having
 # readthedocs.org do it automatically:
