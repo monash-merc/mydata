@@ -1,0 +1,18 @@
+UNDER CONSTRUCTION
+
+See:
+
+packageWindowsVersion.py
+packageMacVersion.py
+and
+createMacBundle.py
+- MyData's "setup.py" file for py2app, called by "packageMacVersion.py".
+
+packageMacVersion.py currently builds a DMG allowing the MyData.app bundle to be
+dragged and dropped into the /Applications folder.  However this isn't suitable
+for installing things outside of the /Applications folder, e.g. a Launch daemon
+in /Library/LaunchDaemons/, so a new installation method for Mac OS X is being
+investigated.  After building the app bundle with
+"python createMacBundle.py pyapp" (which should create "dist/MyData.app"), a PKG 
+installer (archived in a DMG) can be built by running "sh pkgscripts/makemacpkg".
+
