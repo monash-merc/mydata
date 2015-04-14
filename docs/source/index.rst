@@ -15,6 +15,7 @@ Contents
    user-groups
    macosx-walkthrough
    mydata-tutorial-with-mytardis-demo-server
+   client-daemon
    license
 
 
