@@ -97,17 +97,22 @@ Schedule
     the toolbar, or clicking the "MyTardis Sync" menu item in the system tray
     menu.
 
-**Schedule type - On startup**
+**Schedule type - On user login**
     On Windows, a shortcut to MyData (configured to run in --background mode)
     will be placed in the current user's Startup folder.  The exact location
     varies, but on my machine it is
     "C:\\Users\\wettenhj\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup".
+    This is not implemented on Mac OS X yet, by a launch agent can be created
+    for MyData in the user's ~/Library/LaunchAgents/ folder.
+
+**Schedule type - On system startup**
     If MyData is installed as a service (not yet possible), then upon selecting
-    "Startup" for the Schedule Type, MyData will request administrator
-    privileges to ensure that the MyData service is configured to start up
-    automatically.  If MyData is installed as a service, then the shortcut to
-    MyData required to launch MyData's user interface will be placed in the
-    common Startup folder.  Again, the location varies, but for me it is:
+    "On system startup" for the Schedule Type, MyData will request
+    administrator privileges to ensure that the MyData service is installed
+    and configured to start up automatically.  If MyData is installed as a
+    service, then the shortcut to MyData required to launch MyData's user
+    interface will be placed in the common Startup folder.  Again, the location
+    varies, but for me it is:
     "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Startup".
     In the case where MyData runs as a service, MyData's settings will be
     saved in a central location (e.g. "C:\\ProgramData\\Monash\\MyData" or

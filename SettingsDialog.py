@@ -205,7 +205,7 @@ class SettingsDialog(wx.Dialog):
                                                       "Schedule type"))
 
         choices = ["Once", "Daily", "Weekly", "Timer", "Manually",
-                   "On startup"]
+                   "On user login", "On system startup"]
         self.scheduleTypeComboBox = wx.ComboBox(self.scheduleTypePanel,
                                                 choices=choices,
                                                 style=wx.CB_READONLY)
