@@ -10,7 +10,6 @@ class GroupsModel(wx.dataview.PyDataViewIndexListModel):
     def __init__(self, settingsModel):
 
         self.settingsModel = settingsModel
-        self.foldersModel = None
 
         self.groupsData = list()
 
@@ -30,9 +29,6 @@ class GroupsModel(wx.dataview.PyDataViewIndexListModel):
         # It may no longer exist, i.e. if we delete the row with the
         # largest ID, we don't decrement the maximum ID.
         self.maxDataViewId = 0
-
-    def SetFoldersModel(self, foldersModel):
-        self.foldersModel = foldersModel
 
     def Filter(self, searchString):
         self.searchString = searchString

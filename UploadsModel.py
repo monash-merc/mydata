@@ -1,10 +1,12 @@
 import wx.dataview
 import threading
 import traceback
+import os
 
 from UploadModel import UploadModel
 from UploadModel import UploadStatus
 from logger.Logger import logger
+import MemCache
 
 # This model class provides the data to the view when it is asked for.
 # Since it is a list-only model (no hierachical data) then it is able
@@ -26,8 +28,9 @@ class ColumnType:
 
 
 class UploadsModel(wx.dataview.PyDataViewIndexListModel):
-    def __init__(self):
+    def __init__(self, settingsModel):
 
+        self.settingsModel = settingsModel
         self.uploadsData = []
 
         wx.dataview.PyDataViewIndexListModel.__init__(self,
@@ -271,6 +274,12 @@ class UploadsModel(wx.dataview.PyDataViewIndexListModel):
                 return True
         return False
 
+    def ContainsDataViewId(self, dataViewId):
+        for row in range(0, self.GetCount()):
+            if self.uploadsData[row].GetDataViewId() == dataViewId:
+                return True
+        return False
+
     def GetMaxDataViewIdFromExistingRows(self):
         maxDataViewId = 0
         for row in range(0, self.GetCount()):
@@ -321,56 +330,132 @@ class UploadsModel(wx.dataview.PyDataViewIndexListModel):
         except:
             logger.debug(traceback.format_exc())
 
-    def UploadFileSizeUpdated(self, uploadModel):
+    def FileSizeUpdated(self, uploadModel):
         if uploadModel.Canceled():
             return
+        if self.settingsModel.RunningAsDaemon():
+            namespace = "%s_%d_" % (wx.GetApp().name, os.getpid())
+            memcacheClient = \
+                MemCache.MemCacheClient(['127.0.0.1:11211'],
+                                        namespace=namespace, debug=0)
+            max_event_id = memcacheClient.get("max_event_id")
+            if max_event_id is not None:
+                memcacheClient.incr("max_event_id")
+                event_id = int(memcacheClient.get("max_event_id"))
+                daemonEvent = \
+                    {"eventType": "UploadsModel.FileSizeUpdated",
+                     "uploadModel": uploadModel}
+                memcacheClient.set("event_%d" % event_id, daemonEvent)
+            else:
+                raise Exception("Didn't find max_event_id in namespace %s"
+                                % memcacheClient.get_namespace())
         for row in range(0, self.GetCount()):
             # Uploads could be in the process of being canceled:
             if row >= self.GetCount():
                 break
-            if self.uploadsData[row] == uploadModel:
+            if self.uploadsData[row].GetDataViewId() == \
+                    uploadModel.GetDataViewId():
+                if self.settingsModel.RunningAsClient():
+                    self.uploadsData[row] = uploadModel
                 col = self.columnNames.index("File Size")
                 if threading.current_thread().name == "MainThread":
                     self.TryRowValueChanged(row, col)
                 else:
                     wx.CallAfter(self.TryRowValueChanged, row, col)
 
-    def UploadProgressUpdated(self, uploadModel):
+    def ProgressUpdated(self, uploadModel):
         if uploadModel.Canceled():
             return
+        if self.settingsModel.RunningAsDaemon():
+            namespace = "%s_%d_" % (wx.GetApp().name, os.getpid())
+            memcacheClient = \
+                MemCache.MemCacheClient(['127.0.0.1:11211'],
+                                        namespace=namespace, debug=0)
+            max_event_id = memcacheClient.get("max_event_id")
+            if max_event_id is not None:
+                memcacheClient.incr("max_event_id")
+                event_id = int(memcacheClient.get("max_event_id"))
+                daemonEvent = \
+                    {"eventType": "UploadsModel.ProgressUpdated",
+                     "uploadModel": uploadModel}
+                memcacheClient.set("event_%d" % event_id, daemonEvent)
+            else:
+                raise Exception("Didn't find max_event_id in namespace %s"
+                                % memcacheClient.get_namespace())
         for row in range(0, self.GetCount()):
             # Uploads could be in the process of being canceled:
             if row >= self.GetCount():
                 break
-            if self.uploadsData[row] == uploadModel:
+            if self.uploadsData[row].GetDataViewId() == \
+                    uploadModel.GetDataViewId():
+                if self.settingsModel.RunningAsClient():
+                    self.uploadsData[row] = uploadModel
                 col = self.columnNames.index("Progress")
                 if threading.current_thread().name == "MainThread":
                     self.TryRowValueChanged(row, col)
                 else:
                     wx.CallAfter(self.TryRowValueChanged, row, col)
 
-    def UploadStatusUpdated(self, uploadModel):
+    def StatusUpdated(self, uploadModel):
         if uploadModel.Canceled():
             return
+        if self.settingsModel.RunningAsDaemon():
+            namespace = "%s_%d_" % (wx.GetApp().name, os.getpid())
+            memcacheClient = \
+                MemCache.MemCacheClient(['127.0.0.1:11211'],
+                                        namespace=namespace, debug=0)
+            max_event_id = memcacheClient.get("max_event_id")
+            if max_event_id is not None:
+                memcacheClient.incr("max_event_id")
+                event_id = int(memcacheClient.get("max_event_id"))
+                daemonEvent = \
+                    {"eventType": "UploadsModel.StatusUpdated",
+                     "uploadModel": uploadModel}
+                memcacheClient.set("event_%d" % event_id, daemonEvent)
+            else:
+                raise Exception("Didn't find max_event_id in namespace %s"
+                                % memcacheClient.get_namespace())
         for row in range(0, self.GetCount()):
             # Uploads could be in the process of being canceled:
             if row >= self.GetCount():
                 break
-            if self.uploadsData[row] == uploadModel:
+            if self.uploadsData[row].GetDataViewId() == \
+                    uploadModel.GetDataViewId():
+                if self.settingsModel.RunningAsClient():
+                    self.uploadsData[row] = uploadModel
                 col = self.columnNames.index("Status")
                 if threading.current_thread().name == "MainThread":
                     self.TryRowValueChanged(row, col)
                 else:
                     wx.CallAfter(self.TryRowValueChanged, row, col)
 
-    def UploadMessageUpdated(self, uploadModel):
+    def MessageUpdated(self, uploadModel):
         if uploadModel.Canceled():
             return
+        if self.settingsModel.RunningAsDaemon():
+            namespace = "%s_%d_" % (wx.GetApp().name, os.getpid())
+            memcacheClient = \
+                MemCache.MemCacheClient(['127.0.0.1:11211'],
+                                        namespace=namespace, debug=0)
+            max_event_id = memcacheClient.get("max_event_id")
+            if max_event_id is not None:
+                memcacheClient.incr("max_event_id")
+                event_id = int(memcacheClient.get("max_event_id"))
+                daemonEvent = \
+                    {"eventType": "UploadsModel.MessageUpdated",
+                     "uploadModel": uploadModel}
+                memcacheClient.set("event_%d" % event_id, daemonEvent)
+            else:
+                raise Exception("Didn't find max_event_id in namespace %s"
+                                % memcacheClient.get_namespace())
         for row in range(0, self.GetCount()):
             # Uploads could be in the process of being canceled:
             if row >= self.GetCount():
                 break
-            if self.uploadsData[row] == uploadModel:
+            if self.uploadsData[row].GetDataViewId() == \
+                    uploadModel.GetDataViewId():
+                if self.settingsModel.RunningAsClient():
+                    self.uploadsData[row] = uploadModel
                 col = self.columnNames.index("Message")
                 if threading.current_thread().name == "MainThread":
                     self.TryRowValueChanged(row, col)

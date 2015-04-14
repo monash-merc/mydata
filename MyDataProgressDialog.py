@@ -45,14 +45,13 @@ from logger.Logger import logger
 
 
 class MyDataProgressDialog(wx.Frame):
-    def __init__(self, parent, id, title, message, maxValue, userCanAbort,
-                 cancelCallback=None):
+    def __init__(self, parent, id, title="", message="",
+                 maxValue=0, userCanAbort=False):
         wx.Frame.__init__(self, parent, id, title,
                           style=wx.DEFAULT_DIALOG_STYLE
                           | wx.FRAME_FLOAT_ON_PARENT)
 
         self.userRequestedAbort = False
-        self.cancelCallback = cancelCallback
 
         self.panel = wx.Panel(self, wx.ID_ANY)
         self.messageStaticText = wx.StaticText(self.panel, label=message)
@@ -99,12 +98,11 @@ class MyDataProgressDialog(wx.Frame):
         self.Fit()
         self.messageStaticText.SetLabel(message)
         self.Center()
-        self.Show()
 
         return None
 
-    def getProgress(self):
-        return self.progressBar.GetValue()
+    def SetMaxValue(self, maxValue):
+        self.progressBar.SetRange(maxValue)
 
     def ShouldAbort(self):
         return self.userRequestedAbort
@@ -117,11 +115,7 @@ class MyDataProgressDialog(wx.Frame):
         self.messageStaticText.SetLabel("Aborting...")
         self.userRequestedAbort = True
         self.cancelButton.Enable(False)
-        if self.cancelCallback is not None:
-            self.cancelCallback()
-
-    def SetCancelCallback(self, callback):
-        self.cancelCallback = callback
+        wx.GetApp().CancelCallback()
 
     def Update(self, value, message):
         if self.userRequestedAbort:

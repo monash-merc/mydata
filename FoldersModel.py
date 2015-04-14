@@ -13,6 +13,7 @@ from datetime import datetime
 from logger.Logger import logger
 from Exceptions import InvalidFolderStructure
 from Exceptions import DoesNotExist
+import MemCache
 
 
 # This model class provides the data to the view when it is asked for.
@@ -315,6 +316,12 @@ class FoldersModel(wx.dataview.PyDataViewIndexListModel):
                 return True
         return False
 
+    def ContainsDataViewId(self, dataViewId):
+        for row in range(0, self.GetCount()):
+            if self.foldersData[row].GetDataViewId() == dataViewId:
+                return True
+        return False
+
     def GetMaxDataViewIdFromExistingRows(self):
         maxDataViewId = 0
         for row in range(0, self.GetCount()):
@@ -340,16 +347,35 @@ class FoldersModel(wx.dataview.PyDataViewIndexListModel):
         self.ffd = list()
         self.Filter(self.searchString)
 
-    def FolderStatusUpdated(self, folderModel):
+    def StatusUpdated(self, folderModel):
+        if self.settingsModel.RunningAsDaemon():
+            namespace = "%s_%d_" % (wx.GetApp().name, os.getpid())
+            memcacheClient = \
+                MemCache.MemCacheClient(['127.0.0.1:11211'],
+                                        namespace=namespace, debug=0)
+            max_event_id = memcacheClient.get("max_event_id")
+            if max_event_id is not None:
+                memcacheClient.incr("max_event_id")
+                event_id = int(memcacheClient.get("max_event_id"))
+                daemonEvent = \
+                    {"eventType": "FoldersModel.StatusUpdated",
+                     "folderModel": folderModel}
+                memcacheClient.set("event_%d" % event_id, daemonEvent)
+            else:
+                raise Exception("Didn't find max_event_id in namespace %s"
+                                % memcacheClient.get_namespace())
         for row in range(0, self.GetCount()):
-            if self.foldersData[row] == folderModel:
+            if self.foldersData[row].GetDataViewId() == \
+                    folderModel.GetDataViewId():
+                if self.settingsModel.RunningAsClient():
+                    self.foldersData[row] = folderModel
                 col = self.columnNames.index("Status")
                 if threading.current_thread().name == "MainThread":
                     self.RowValueChanged(row, col)
                 else:
                     wx.CallAfter(self.RowValueChanged, row, col)
 
-    def Refresh(self, incrementProgressDialog, shouldAbort):
+    def Refresh(self, shouldAbort):
         if self.GetCount() > 0:
             self.DeleteAllRows()
         if self.usersModel.GetCount() > 0:
@@ -378,13 +404,13 @@ class FoldersModel(wx.dataview.PyDataViewIndexListModel):
         logger.debug("FoldersModel.Refresh(): Scanning " + dataDir + "...")
         if folderStructure.startswith("Username") or \
                 folderStructure.startswith("Email"):
-            self.ScanForUserFolders(incrementProgressDialog, shouldAbort)
+            self.ScanForUserFolders(shouldAbort)
         elif folderStructure.startswith("User Group"):
-            self.ScanForGroupFolders(incrementProgressDialog, shouldAbort)
+            self.ScanForGroupFolders(shouldAbort)
         else:
             raise InvalidFolderStructure("Unknown folder structure.")
 
-    def ScanForUserFolders(self, incrementProgressDialog, shouldAbort):
+    def ScanForUserFolders(self, shouldAbort):
         dataDir = self.settingsModel.GetDataDirectory()
         folderStructure = self.settingsModel.GetFolderStructure()
         userFolderNames = os.walk(dataDir).next()[1]
@@ -418,6 +444,24 @@ class FoldersModel(wx.dataview.PyDataViewIndexListModel):
                 return
             if userRecord is not None:
                 userRecord.SetDataViewId(usersDataViewId)
+                if self.settingsModel.RunningAsDaemon():
+                    namespace = "%s_%d_" % (wx.GetApp().name, os.getpid())
+                    memcacheClient = \
+                        MemCache.MemCacheClient(['127.0.0.1:11211'],
+                                                namespace=namespace, debug=0)
+                    max_event_id = memcacheClient.get("max_event_id")
+                    if max_event_id is not None:
+                        memcacheClient.incr("max_event_id")
+                        event_id = int(memcacheClient.get("max_event_id"))
+                        daemonEvent = \
+                            {"eventType": "UsersModel.AddRow",
+                             "userRecord": userRecord}
+                        memcacheClient.set("event_%d" % event_id, daemonEvent)
+                    else:
+                        raise Exception("Didn't find max_event_id in "
+                                        "namespace %s"
+                                        % memcacheClient.get_namespace())
+
                 self.usersModel.AddRow(userRecord)
                 userFolderPath = os.path.join(dataDir, userFolderName)
                 if folderStructure == 'Username / Dataset' or \
@@ -466,6 +510,24 @@ class FoldersModel(wx.dataview.PyDataViewIndexListModel):
                                   email=userFolderName,
                                   userNotFoundInMyTardis=True)
                 userRecord.SetDataViewId(usersDataViewId)
+                if self.settingsModel.RunningAsDaemon():
+                    namespace = "%s_%d_" % (wx.GetApp().name, os.getpid())
+                    memcacheClient = \
+                        MemCache.MemCacheClient(['127.0.0.1:11211'],
+                                                namespace=namespace, debug=0)
+                    max_event_id = memcacheClient.get("max_event_id")
+                    if max_event_id is not None:
+                        memcacheClient.incr("max_event_id")
+                        event_id = int(memcacheClient.get("max_event_id"))
+                        daemonEvent = \
+                            {"eventType": "UsersModel.AddRow",
+                             "userRecord": userRecord}
+                        memcacheClient.set("event_%d" % event_id, daemonEvent)
+                    else:
+                        raise Exception("Didn't find max_event_id in "
+                                        "namespace %s"
+                                        % memcacheClient.get_namespace())
+
                 self.usersModel.AddRow(userRecord)
                 if shouldAbort():
                     wx.CallAfter(wx.GetApp().GetMainFrame().SetStatusMessage,
@@ -475,11 +537,11 @@ class FoldersModel(wx.dataview.PyDataViewIndexListModel):
                                                         userFolderName),
                                            userRecord)
             if threading.current_thread().name == "MainThread":
-                incrementProgressDialog()
+                wx.GetApp().IncrementProgressDialog()
             else:
-                wx.CallAfter(incrementProgressDialog)
+                wx.CallAfter(wx.GetApp().IncrementProgressDialog)
 
-    def ScanForGroupFolders(self, incrementProgressDialog, shouldAbort):
+    def ScanForGroupFolders(self, shouldAbort):
         dataDir = self.settingsModel.GetDataDirectory()
         groupFolderNames = os.walk(dataDir).next()[1]
         for groupFolderName in groupFolderNames:
@@ -504,6 +566,24 @@ class FoldersModel(wx.dataview.PyDataViewIndexListModel):
                 return
             if groupRecord is not None:
                 groupRecord.SetDataViewId(groupsDataViewId)
+                if self.settingsModel.RunningAsDaemon():
+                    namespace = "%s_%d_" % (wx.GetApp().name, os.getpid())
+                    memcacheClient = \
+                        MemCache.MemCacheClient(['127.0.0.1:11211'],
+                                                namespace=namespace, debug=0)
+                    max_event_id = memcacheClient.get("max_event_id")
+                    if max_event_id is not None:
+                        memcacheClient.incr("max_event_id")
+                        event_id = int(memcacheClient.get("max_event_id"))
+                        daemonEvent = \
+                            {"eventType": "GroupsModel.AddRow",
+                             "groupRecord": groupRecord}
+                        memcacheClient.set("event_%d" % event_id, daemonEvent)
+                    else:
+                        raise Exception("Didn't find max_event_id in "
+                                        "namespace %s"
+                                        % memcacheClient.get_namespace())
+
                 self.groupsModel.AddRow(groupRecord)
                 self.ImportGroupFolders(os.path.join(dataDir,
                                                      groupFolderName),
@@ -520,9 +600,9 @@ class FoldersModel(wx.dataview.PyDataViewIndexListModel):
                 if not self.settingsModel.RunningInBackgroundMode():
                     raise InvalidFolderStructure(message)
             if threading.current_thread().name == "MainThread":
-                incrementProgressDialog()
+                wx.GetApp().IncrementProgressDialog()
             else:
-                wx.CallAfter(incrementProgressDialog)
+                wx.CallAfter(wx.GetApp().IncrementProgressDialog)
 
     def ScanForDatasetFolders(self, pathToScan, owner):
         try:
@@ -552,8 +632,6 @@ class FoldersModel(wx.dataview.PyDataViewIndexListModel):
                                 location=pathToScan,
                                 folder_type='Dataset',
                                 owner=owner,
-                                foldersModel=self,
-                                usersModel=self.usersModel,
                                 settingsModel=self.settingsModel)
                 folderModel.SetCreatedDate()
                 if not owner.UserNotFoundInMyTardis():
@@ -585,6 +663,23 @@ class FoldersModel(wx.dataview.PyDataViewIndexListModel):
                         % (self.settingsModel.GetInstrumentName(),
                             UserModel.USER_NOT_FOUND_STRING)
                 folderModel.SetExperimentTitle(experimentTitle)
+                if self.settingsModel.RunningAsDaemon():
+                    namespace = "%s_%d_" % (wx.GetApp().name, os.getpid())
+                    memcacheClient = \
+                        MemCache.MemCacheClient(['127.0.0.1:11211'],
+                                                namespace=namespace, debug=0)
+                    max_event_id = memcacheClient.get("max_event_id")
+                    if max_event_id is not None:
+                        memcacheClient.incr("max_event_id")
+                        event_id = int(memcacheClient.get("max_event_id"))
+                        daemonEvent = \
+                            {"eventType": "FoldersModel.AddRow",
+                             "folderModel": folderModel}
+                        memcacheClient.set("event_%d" % event_id, daemonEvent)
+                    else:
+                        raise Exception("Didn't find max_event_id in "
+                                        "namespace %s"
+                                        % memcacheClient.get_namespace())
                 self.AddRow(folderModel)
         except:
             print traceback.format_exc()
@@ -621,11 +716,26 @@ class FoldersModel(wx.dataview.PyDataViewIndexListModel):
                                           location=expFolderPath,
                                           folder_type='Dataset',
                                           owner=owner,
-                                          foldersModel=self,
-                                          usersModel=self.usersModel,
                                           settingsModel=self.settingsModel)
                 folderModel.SetCreatedDate()
                 folderModel.SetExperimentTitle(expFolderName)
+                if self.settingsModel.RunningAsDaemon():
+                    namespace = "%s_%d_" % (wx.GetApp().name, os.getpid())
+                    memcacheClient = \
+                        MemCache.MemCacheClient(['127.0.0.1:11211'],
+                                                namespace=namespace, debug=0)
+                    max_event_id = memcacheClient.get("max_event_id")
+                    if max_event_id is not None:
+                        memcacheClient.incr("max_event_id")
+                        event_id = int(memcacheClient.get("max_event_id"))
+                        daemonEvent = \
+                            {"eventType": "FoldersModel.AddRow",
+                             "folderModel": folderModel}
+                        memcacheClient.set("event_%d" % event_id, daemonEvent)
+                    else:
+                        raise Exception("Didn't find max_event_id in "
+                                        "namespace %s"
+                                        % memcacheClient.get_namespace())
                 self.AddRow(folderModel)
 
     def ImportGroupFolders(self, groupFolderPath, groupModel):
@@ -695,14 +805,30 @@ class FoldersModel(wx.dataview.PyDataViewIndexListModel):
                                               location=userFolderPath,
                                               folder_type='Dataset',
                                               owner=owner,
-                                              foldersModel=self,
-                                              usersModel=self.usersModel,
                                               settingsModel=self.settingsModel)
                     folderModel.SetGroup(groupModel)
                     folderModel.SetCreatedDate()
                     folderModel.SetExperimentTitle("%s - %s" %
                                                    (instrumentFolders[0],
                                                     userFolderName))
+                    if self.settingsModel.RunningAsDaemon():
+                        namespace = "%s_%d_" % (wx.GetApp().name, os.getpid())
+                        memcacheClient = \
+                            MemCache.MemCacheClient(['127.0.0.1:11211'],
+                                                    namespace=namespace,
+                                                    debug=0)
+                        max_event_id = memcacheClient.get("max_event_id")
+                        if max_event_id is not None:
+                            memcacheClient.incr("max_event_id")
+                            event_id = int(memcacheClient.get("max_event_id"))
+                            daemonEvent = \
+                                {"eventType": "FoldersModel.AddRow",
+                                 "folderModel": folderModel}
+                            memcacheClient.set("event_%d" % event_id, daemonEvent)
+                        else:
+                            raise Exception("Didn't find max_event_id in "
+                                            "namespace %s"
+                                            % memcacheClient.get_namespace())
                     self.AddRow(folderModel)
         except InvalidFolderStructure:
             raise

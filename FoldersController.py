@@ -16,6 +16,7 @@ import hashlib
 import poster
 
 import OpenSSH
+import MemCache
 
 from ExperimentModel import ExperimentModel
 from DatasetModel import DatasetModel
@@ -189,6 +190,24 @@ class FoldersController():
                            "\"%s\" because we are already showing an error "
                            "dialog." % event.message)
             return
+        if self.settingsModel.RunningAsDaemon():
+            namespace = "%s_%d_" % (wx.GetApp().name, os.getpid())
+            memcacheClient = \
+                MemCache.MemCacheClient(['127.0.0.1:11211'],
+                                        namespace=namespace, debug=0)
+            max_event_id = memcacheClient.get("max_event_id")
+            if max_event_id is not None:
+                memcacheClient.incr("max_event_id")
+                event_id = int(memcacheClient.get("max_event_id"))
+                daemonEvent = \
+                    {"eventType": "FoldersController.ShowMessageDialog",
+                     "message": event.message,
+                     "icon": event.icon}
+                memcacheClient.set("event_%d" % event_id, daemonEvent)
+                return
+            else:
+                raise Exception("Didn't find max_event_id in namespace %s"
+                                % memcacheClient.get_namespace())
         if event.icon == wx.ICON_ERROR:
             self.SetShowingErrorDialog(True)
         dlg = wx.MessageDialog(None, event.message, event.title,
@@ -231,6 +250,22 @@ class FoldersController():
         uploadModel = UploadModel(dataViewId=uploadDataViewId,
                                   folderModel=folderModel,
                                   dataFileIndex=dfi)
+        if self.settingsModel.RunningAsDaemon():
+            namespace = "%s_%d_" % (wx.GetApp().name, os.getpid())
+            memcacheClient = \
+                MemCache.MemCacheClient(['127.0.0.1:11211'],
+                                        namespace=namespace, debug=0)
+            max_event_id = memcacheClient.get("max_event_id")
+            if max_event_id is not None:
+                memcacheClient.incr("max_event_id")
+                event_id = int(memcacheClient.get("max_event_id"))
+                daemonEvent = \
+                    {"eventType": "UploadsModel.AddRow",
+                     "uploadModel": uploadModel}
+                memcacheClient.set("event_%d" % event_id, daemonEvent)
+            else:
+                raise Exception("Didn't find max_event_id in namespace %s"
+                                % memcacheClient.get_namespace())
         uploadsModel.AddRow(uploadModel)
         self.uploadsThreadingLock.release()
         if hasattr(event, "bytesUploadedToStaging"):
@@ -544,7 +579,7 @@ class FoldersController():
             logger.info("Data scan and uploads appear to have "
                         "completed successfully.")
 
-        self.notifyWindow.SetOnRefreshRunning(False)
+        self.notifyWindow.SetFolderScansAndUploadsRunning(False)
         self.SetShuttingDown(False)
 
         try:
@@ -601,8 +636,6 @@ class FoldersController():
                                           location=location,
                                           folder_type=self.lastUsedFolderType,
                                           owner=owner,
-                                          foldersModel=self.foldersModel,
-                                          usersModel=usersModel,
                                           settingsModel=settingsModel)
                 self.foldersModel.AddRow(folderModel)
                 folderModelsAdded.append(folderModel)
@@ -756,12 +789,30 @@ class VerifyDatafileRunnable():
             VerificationModel(dataViewId=verificationDataViewId,
                               folderModel=self.folderModel,
                               dataFileIndex=self.dataFileIndex)
+        if self.settingsModel.RunningAsDaemon():
+            namespace = "%s_%d_" % (wx.GetApp().name, os.getpid())
+            memcacheClient = \
+                MemCache.MemCacheClient(['127.0.0.1:11211'],
+                                        namespace=namespace, debug=0)
+            max_event_id = memcacheClient.get("max_event_id")
+            if max_event_id is not None:
+                memcacheClient.incr("max_event_id")
+                event_id = int(memcacheClient.get("max_event_id"))
+                daemonEvent = \
+                    {"eventType": "VerificationsModel.AddRow",
+                     "verificationModel": self.verificationModel}
+                memcacheClient.set("event_%d" % event_id, daemonEvent)
+            else:
+                raise Exception("Didn't find max_event_id in namespace %s"
+                                % memcacheClient.get_namespace())
+            logger.debug("Added VerificationsModel.AddRow event for %s" \
+                         % dataFileName)
         verificationsModel.AddRow(self.verificationModel)
         fc.verificationsThreadingLock.release()
         self.verificationModel.SetMessage("Looking for matching file on "
                                           "MyTardis server...")
         self.verificationModel.SetStatus(VerificationStatus.IN_PROGRESS)
-        verificationsModel.VerificationMessageUpdated(self.verificationModel)
+        verificationsModel.MessageUpdated(self.verificationModel)
 
         existingDatafile = None
         try:
@@ -773,14 +824,12 @@ class VerifyDatafileRunnable():
             self.verificationModel.SetMessage("Found datafile on "
                                               "MyTardis server.")
             self.verificationModel.SetStatus(VerificationStatus.FOUND_VERIFIED)
-            verificationsModel\
-                .VerificationMessageUpdated(self.verificationModel)
+            verificationsModel.MessageUpdated(self.verificationModel)
         except DoesNotExist, e:
             self.verificationModel.SetMessage("Didn't find datafile on "
                                               "MyTardis server.")
             self.verificationModel.SetStatus(VerificationStatus.NOT_FOUND)
-            verificationsModel\
-                .VerificationMessageUpdated(self.verificationModel)
+            verificationsModel.MessageUpdated(self.verificationModel)
             wx.PostEvent(
                 self.foldersController.notifyWindow,
                 self.foldersController.DidntFindMatchingDatafileOnServerEvent(
@@ -790,7 +839,7 @@ class VerifyDatafileRunnable():
                     verificationModel=self.verificationModel))
         except MultipleObjectsReturned, e:
             self.folderModel.SetDataFileUploaded(self.dataFileIndex, True)
-            self.foldersModel.FolderStatusUpdated(self.folderModel)
+            self.foldersModel.StatusUpdated(self.folderModel)
             wx.PostEvent(
                 self.foldersController.notifyWindow,
                 self.foldersController.FoundVerifiedDatafileEvent(
@@ -875,10 +924,10 @@ class VerifyDatafileRunnable():
                             .SetStatus(VerificationStatus
                                        .FOUND_UNVERIFIED_FULL_SIZE)
                         verificationsModel\
-                            .VerificationMessageUpdated(self.verificationModel)
+                            .MessageUpdated(self.verificationModel)
                         self.folderModel\
                             .SetDataFileUploaded(self.dataFileIndex, True)
-                        self.foldersModel.FolderStatusUpdated(self.folderModel)
+                        self.foldersModel.StatusUpdated(self.folderModel)
                         wx.PostEvent(
                             self.foldersController.notifyWindow,
                             self.foldersController
@@ -899,7 +948,7 @@ class VerifyDatafileRunnable():
                             .SetStatus(VerificationStatus
                                        .FOUND_UNVERIFIED_NOT_FULL_SIZE)
                         verificationsModel\
-                            .VerificationMessageUpdated(self.verificationModel)
+                            .MessageUpdated(self.verificationModel)
                         logger.debug("Re-uploading \"%s\" to staging, because "
                                      "the file size is %d bytes in staging, "
                                      "but it should be %d bytes."
@@ -929,7 +978,7 @@ class VerifyDatafileRunnable():
             else:
                 self.folderModel.SetDataFileUploaded(self.dataFileIndex,
                                                      True)
-                self.foldersModel.FolderStatusUpdated(self.folderModel)
+                self.foldersModel.StatusUpdated(self.folderModel)
                 wx.PostEvent(
                     self.foldersController.notifyWindow,
                     self.foldersController.FoundVerifiedDatafileEvent(
@@ -973,9 +1022,9 @@ class UploadDatafileRunnable():
         if (time.time() - os.path.getmtime(dataFilePath)) <= thirtySeconds:
             message = "Not uploading file, in case it is still being modified."
             self.uploadModel.SetMessage(message)
-            self.uploadsModel.UploadMessageUpdated(self.uploadModel)
+            self.uploadsModel.MessageUpdated(self.uploadModel)
             self.uploadModel.SetStatus(UploadStatus.FAILED)
-            self.uploadsModel.UploadStatusUpdated(self.uploadModel)
+            self.uploadsModel.StatusUpdated(self.uploadModel)
             return
 
         logger.debug("Uploading " +
@@ -1019,14 +1068,14 @@ class UploadDatafileRunnable():
 
                 # self.uploadModel.SetProgress(float(percentComplete))
                 self.uploadModel.SetProgress(int(percentComplete))
-                self.uploadsModel.UploadProgressUpdated(self.uploadModel)
+                self.uploadsModel.ProgressUpdated(self.uploadModel)
                 if dataFileSize >= (1024 * 1024 * 1024):
                     self.uploadModel.SetMessage("%3.1f %%  MD5 summed"
                                                 % percentComplete)
                 else:
                     self.uploadModel.SetMessage("%3d %%  MD5 summed"
                                                 % int(percentComplete))
-                self.uploadsModel.UploadMessageUpdated(self.uploadModel)
+                self.uploadsModel.MessageUpdated(self.uploadModel)
                 myTardisUrl = self.settingsModel.GetMyTardisUrl()
                 wx.PostEvent(
                     self.foldersController.notifyWindow,
@@ -1049,14 +1098,14 @@ class UploadDatafileRunnable():
             dataFileSize = int(self.existingUnverifiedDatafile.GetSize())
 
         self.uploadModel.SetProgress(0)
-        self.uploadsModel.UploadProgressUpdated(self.uploadModel)
+        self.uploadsModel.ProgressUpdated(self.uploadModel)
         if dataFileSize == 0:
-            self.uploadsModel.UploadFileSizeUpdated(self.uploadModel)
+            self.uploadsModel.FileSizeUpdated(self.uploadModel)
             self.uploadModel.SetMessage("MyTardis will not accept a "
                                         "data file with a size of zero.")
-            self.uploadsModel.UploadMessageUpdated(self.uploadModel)
+            self.uploadsModel.MessageUpdated(self.uploadModel)
             self.uploadModel.SetStatus(UploadStatus.FAILED)
-            self.uploadsModel.UploadStatusUpdated(self.uploadModel)
+            self.uploadsModel.StatusUpdated(self.uploadModel)
             return
 
         if self.foldersController.IsShuttingDown():
@@ -1103,7 +1152,7 @@ class UploadDatafileRunnable():
             self.uploadModel.SetBytesUploaded(current)
             # self.uploadModel.SetProgress(float(percentComplete))
             self.uploadModel.SetProgress(int(percentComplete))
-            self.uploadsModel.UploadProgressUpdated(self.uploadModel)
+            self.uploadsModel.ProgressUpdated(self.uploadModel)
             if message:
                 self.uploadModel.SetMessage(message)
             else:
@@ -1113,7 +1162,7 @@ class UploadDatafileRunnable():
                 else:
                     self.uploadModel.SetMessage("%3d %%  uploaded"
                                                 % int(percentComplete))
-            self.uploadsModel.UploadMessageUpdated(self.uploadModel)
+            self.uploadsModel.MessageUpdated(self.uploadModel)
             myTardisUrl = self.settingsModel.GetMyTardisUrl()
             wx.PostEvent(
                 self.foldersController.notifyWindow,
@@ -1368,9 +1417,9 @@ class UploadDatafileRunnable():
                         connectionStatus=ConnectionStatus.DISCONNECTED))
 
             self.uploadModel.SetMessage(str(e))
-            self.uploadsModel.UploadMessageUpdated(self.uploadModel)
+            self.uploadsModel.MessageUpdated(self.uploadModel)
             self.uploadModel.SetStatus(UploadStatus.FAILED)
-            self.uploadsModel.UploadStatusUpdated(self.uploadModel)
+            self.uploadsModel.StatusUpdated(self.uploadModel)
             if dataFileDirectory != "":
                 logger.debug("Upload failed for datafile " + dataFileName +
                              " in subdirectory " + dataFileDirectory +
@@ -1409,14 +1458,14 @@ class UploadDatafileRunnable():
         if uploadSuccess:
             logger.debug("Upload succeeded for " + dataFilePath)
             self.uploadModel.SetStatus(UploadStatus.COMPLETED)
-            self.uploadsModel.UploadStatusUpdated(self.uploadModel)
+            self.uploadsModel.StatusUpdated(self.uploadModel)
             self.uploadModel.SetMessage("Upload complete!")
             # self.uploadModel.SetProgress(100.0)
             self.uploadModel.SetProgress(100)
-            self.uploadsModel.UploadProgressUpdated(self.uploadModel)
+            self.uploadsModel.ProgressUpdated(self.uploadModel)
             self.folderModel.SetDataFileUploaded(self.dataFileIndex,
                                                  uploaded=True)
-            self.foldersModel.FolderStatusUpdated(self.folderModel)
+            self.foldersModel.StatusUpdated(self.folderModel)
             wx.PostEvent(
                 self.foldersController.notifyWindow,
                 self.foldersController.UploadCompleteEvent(
@@ -1430,7 +1479,7 @@ class UploadDatafileRunnable():
                 return
             logger.error("Upload failed for " + dataFilePath)
             self.uploadModel.SetStatus(UploadStatus.FAILED)
-            self.uploadsModel.UploadStatusUpdated(self.uploadModel)
+            self.uploadsModel.StatusUpdated(self.uploadModel)
             if not postSuccess and response is not None:
                 message = "Internal Server Error: " \
                     "See MyData's log for further " \
@@ -1442,10 +1491,10 @@ class UploadDatafileRunnable():
 
             # self.uploadModel.SetProgress(0.0)
             self.uploadModel.SetProgress(0)
-            self.uploadsModel.UploadProgressUpdated(self.uploadModel)
+            self.uploadsModel.ProgressUpdated(self.uploadModel)
             self.folderModel.SetDataFileUploaded(self.dataFileIndex,
                                                  uploaded=False)
-            self.foldersModel.FolderStatusUpdated(self.folderModel)
+            self.foldersModel.StatusUpdated(self.folderModel)
             wx.PostEvent(
                 self.foldersController.notifyWindow,
                 self.foldersController.UploadCompleteEvent(

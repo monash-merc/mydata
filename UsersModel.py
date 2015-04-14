@@ -225,6 +225,12 @@ class UsersModel(wx.dataview.PyDataViewIndexListModel):
                 return True
         return False
 
+    def ContainsDataViewId(self, dataViewId):
+        for row in range(0, self.GetCount()):
+            if self.usersData[row].GetDataViewId() == dataViewId:
+                return True
+        return False
+
     def GetUserById(self, id):
         for row in range(0, self.GetRowCount()):
             if self.unfilteredUsersData[row].GetId() == id:

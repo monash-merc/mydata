@@ -7,13 +7,13 @@ from VerificationModel import VerificationModel
 from VerificationModel import VerificationStatus
 from UploadsModel import ColumnType
 from logger.Logger import logger
+import MemCache
 
 
 class VerificationsModel(wx.dataview.PyDataViewIndexListModel):
-    def __init__(self):
+    def __init__(self, settingsModel):
 
-        self.foldersModel = None
-
+        self.settingsModel = settingsModel
         self.verificationsData = list()
 
         wx.dataview.PyDataViewIndexListModel\
@@ -39,9 +39,6 @@ class VerificationsModel(wx.dataview.PyDataViewIndexListModel):
         # It may no longer exist, i.e. if we delete the row with the
         # largest ID, we don't decrement the maximum ID.
         self.maxDataViewId = 0
-
-    def SetFoldersModel(self, foldersModel):
-        self.foldersModel = foldersModel
 
     def Filter(self, searchString):
         self.searchString = searchString
@@ -98,6 +95,12 @@ class VerificationsModel(wx.dataview.PyDataViewIndexListModel):
                 del self.fvd[filteredRow]
                 if self.GetFilteredRowCount() == 0:
                     self.filtered = False
+
+    def ContainsDataViewId(self, dataViewId):
+        for row in range(0, self.GetCount()):
+            if self.verificationsData[row].GetDataViewId() == dataViewId:
+                return True
+        return False
 
     # All of our columns are strings.  If the model or the renderers
     # in the view are other types then that should be reflected here.
@@ -263,11 +266,31 @@ class VerificationsModel(wx.dataview.PyDataViewIndexListModel):
         except:
             logger.debug(traceback.format_exc())
 
-    def VerificationMessageUpdated(self, verificationModel):
+    def MessageUpdated(self, verificationModel):
+        if self.settingsModel.RunningAsDaemon():
+            # print "VerificationsModel.MessageUpdated"
+            namespace = "%s_%d_" % (wx.GetApp().name, os.getpid())
+            memcacheClient = \
+                MemCache.MemCacheClient(['127.0.0.1:11211'],
+                                        namespace=namespace, debug=0)
+            max_event_id = memcacheClient.get("max_event_id")
+            if max_event_id is not None:
+                memcacheClient.incr("max_event_id")
+                event_id = int(memcacheClient.get("max_event_id"))
+                daemonEvent = \
+                    {"eventType": "VerificationsModel.MessageUpdated",
+                     "verificationModel": verificationModel}
+                memcacheClient.set("event_%d" % event_id, daemonEvent)
+            else:
+                raise Exception("Didn't find max_event_id in namespace %s"
+                                % memcacheClient.get_namespace())
         for row in range(0, self.GetCount()):
             if row >= self.GetCount():
                 break
-            if self.verificationsData[row] == verificationModel:
+            if self.verificationsData[row].GetDataViewId() == \
+                    verificationModel.GetDataViewId():
+                if self.settingsModel.RunningAsClient():
+                    self.verificationsData[row] = verificationModel
                 col = self.columnNames.index("Message")
                 if threading.current_thread().name == "MainThread":
                     self.TryRowValueChanged(row, col)
