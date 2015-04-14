@@ -27,6 +27,18 @@ class VerificationModel():
         self.status = VerificationStatus.NOT_STARTED
         self.complete = False
 
+    def __str__(self):
+        return "VerificationModel " + self.filename + \
+            " - " + self.GetFolder()
+
+    def __unicode__(self):
+        return "VerificationModel " + self.filename + \
+            " - " + self.GetFolder()
+
+    def __repr__(self):
+        return "VerificationModel " + self.filename + \
+            " - " + self.GetFolder()
+
     def GetDataViewId(self):
         return self.dataViewId
 
