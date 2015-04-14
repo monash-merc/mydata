@@ -37,6 +37,13 @@ class UploadModel():
 
         self.verificationModel = None
 
+    def __getstate__(self):
+        dictCopy = self.__dict__.copy()
+        # Remove unpickleable fields:
+        del dictCopy['bufferedReader']
+        del dictCopy['scpUploadProcess']
+        return dictCopy
+
     def GetDataViewId(self):
         return self.dataViewId
 

@@ -12,7 +12,7 @@ from DatasetModel import DatasetModel
 class FolderModel():
 
     def __init__(self, dataViewId, folder, location, folder_type, owner,
-                 foldersModel, usersModel, settingsModel):
+                 settingsModel):
         self.dataViewId = dataViewId
         self.folder = folder
         self.location = location
@@ -38,8 +38,6 @@ class FolderModel():
         self.status = "0 of %d files uploaded" % (self.numFiles,)
         self.folder_type = folder_type
         self.owner = owner
-        self.foldersModel = foldersModel
-        self.usersModel = usersModel
         self.settingsModel = settingsModel
 
         self.datasetModel = None
