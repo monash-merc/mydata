@@ -1,0 +1,66 @@
+#!/bin/sh
+
+set -u
+set -e
+trap onexit INT
+trap onexit TERM
+trap onexit EXIT
+
+TMPDIR=
+
+onexit()
+{
+	if [ ! "$TMPDIR" = "" ]; then
+		rm -rf $TMPDIR
+	fi
+}
+
+PACKAGE_NAME=MyData
+APP_NAME=MyData
+echo "Using VERSION=0.2.1"
+VERSION=0.2.1
+echo "BUILD datestamp is populated by CMake."
+BUILD=20150414
+echo "SRCDIR is populated by CMake."
+SRCDIR=.
+
+if [ -f $PACKAGE_NAME-$VERSION.dmg ]; then
+	rm -f $PACKAGE_NAME-$VERSION.dmg
+fi
+
+umask 022
+TMPDIR=`mktemp -d /tmp/$PACKAGE_NAME-build.XXXXXX`
+PKGROOT=$TMPDIR/pkg/Package_Root
+mkdir -p $PKGROOT
+
+echo "PKGROOT: $PKGROOT"
+# echo "cp -r ../dist/* $PKGROOT"
+# cp -r ../dist/* $PKGROOT
+# make install DESTDIR=$PKGROOT
+
+mkdir -p $TMPDIR/pkg/
+cp $SRCDIR/release/License.rtf $SRCDIR/release/Welcome.txt $SRCDIR/release/ReadMe.txt $TMPDIR/pkg/
+cp pkgscripts/Distribution.xml $TMPDIR/pkg/Distribution.xml
+
+mkdir -p "$PKGROOT/Applications/$PACKAGE_NAME"
+echo "We can use our py2app script here:"
+# sh pkgscripts/makemacapp
+
+install -m 644 pkgscripts/uninstall.applescript $TMPDIR
+osacompile -t APPL -a i386 -o "$TMPDIR/Uninstall $PACKAGE_NAME.app" $TMPDIR/uninstall.applescript
+cp -RX "dist/$APP_NAME.app" "$PKGROOT/Applications/$PACKAGE_NAME/$APP_NAME.app"
+install -m 755 pkgscripts/uninstall "$PKGROOT/Applications/$PACKAGE_NAME/$APP_NAME.app/Contents/MacOS/"
+cp -RX "$TMPDIR/Uninstall $PACKAGE_NAME.app" "$PKGROOT/Applications/$PACKAGE_NAME/"
+
+mkdir $TMPDIR/dmg
+pkgbuild --root $PKGROOT --component-plist $SRCDIR/release/Package.plist \
+	--version $VERSION.$BUILD --identifier org.mytardis.mydata \
+	$TMPDIR/pkg/$PACKAGE_NAME.pkg
+productbuild --distribution $TMPDIR/pkg/Distribution.xml --package-path \
+	$TMPDIR/pkg/ --resources $TMPDIR/pkg/ $TMPDIR/dmg/$PACKAGE_NAME.pkg
+mv "$TMPDIR/Uninstall $PACKAGE_NAME.app" $TMPDIR/dmg/
+hdiutil create -fs HFS+ -volname $PACKAGE_NAME-$VERSION \
+	-srcfolder "$TMPDIR/dmg" $TMPDIR/$PACKAGE_NAME-$VERSION.dmg
+cp $TMPDIR/$PACKAGE_NAME-$VERSION.dmg .
+
+exit

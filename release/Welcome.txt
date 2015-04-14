@@ -1,0 +1,1 @@
+This package will install MyData for Intel-based Macintosh computers.  To remove MyData, use the "Uninstall MyData" application.

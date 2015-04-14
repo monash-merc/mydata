@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="1">
+	<script>
+	function installationCheck() {
+		if(!(system.compareVersions(system.version.ProductVersion, '10.5') >= 0)) {
+			my.result.title = system.localizedString('Cannot install MyData');
+			my.result.message = system.localizedString('This package requires OS X 10.5 or higher.');
+			my.result.type = 'Fatal';
+			return false;
+		}
+	}
+	</script>
+
+	<title>MyData</title>
+	<welcome file="Welcome.txt" />
+	<readme file="ReadMe.txt" />
+	<license file="License.rtf" />
+	<domains
+		enable_anywhere="false"
+		enable_currentUserHome="false"
+		enable_localSystem="true"
+	/>
+	<installation-check script="installationCheck()" />
+	<options customize="never" />
+	<choices-outline>
+		<line choice="default">
+			<line choice="org.mytardis.mydata"/>
+		</line>
+	</choices-outline>
+	<choice id="default"/>
+	<choice id="org.mytardis.mydata" visible="false">
+		<pkg-ref id="org.mytardis.mydata"/>
+	</choice>
+	<pkg-ref auth="root"
+		id="org.mytardis.mydata">MyData.pkg</pkg-ref>
+</installer-gui-script>
