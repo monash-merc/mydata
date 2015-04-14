@@ -8,6 +8,7 @@ import traceback
 import threading
 import argparse
 from datetime import datetime
+import logging
 
 import CommitDef
 import MyDataVersionNumber
@@ -33,6 +34,7 @@ from logger.Logger import logger
 from MyDataTaskBarIcon import MyDataTaskBarIcon
 from MyDataProgressDialog import MyDataProgressDialog
 import MyDataEvents as mde
+import MemCache
 
 
 class NotebookTabs:
@@ -79,14 +81,29 @@ class MyDataFrame(wx.Frame):
         self.connected = False
         self.SetConnected(settingsModel.GetMyTardisUrl(), False)
 
-    def OnRefreshIsRunning(self):
-        return wx.GetApp().OnRefreshIsRunning()
+    def FolderScansAndUploadsAreRunning(self):
+        return wx.GetApp().FolderScansAndUploadsAreRunning()
 
-    def SetOnRefreshRunning(self, onRefreshRunning):
-        wx.GetApp().SetOnRefreshRunning(onRefreshRunning)
+    def SetFolderScansAndUploadsRunning(self, folderScansAndUploadsRunning):
+        wx.GetApp()\
+            .SetFolderScansAndUploadsRunning(folderScansAndUploadsRunning)
 
-    def SetStatusMessage(self, msg):
-        self.statusbar.SetStatusMessage(msg)
+    def SetStatusMessage(self, message):
+        if self.settingsModel.RunningAsDaemon():
+            max_event_id = wx.GetApp().memcacheClient.get("max_event_id")
+            if max_event_id is not None:
+                wx.GetApp().memcacheClient.incr("max_event_id")
+                event_id = int(wx.GetApp().memcacheClient.get("max_event_id"))
+                daemonEvent = \
+                    {"eventType": "SetStatusMessage",
+                     "message": message}
+                wx.GetApp().memcacheClient.set("event_%d" % event_id,
+                                               daemonEvent)
+            else:
+                raise Exception("Didn't find max_event_id in namespace %s"
+                                % wx.GetApp().memcacheClient.get_namespace())
+        else:
+            self.statusbar.SetStatusMessage(message)
 
     def SetConnected(self, myTardisUrl, connected):
         if self.connected == connected:
@@ -139,32 +156,115 @@ class MyData(wx.App):
         self.settingsModel = SettingsModel(self.GetConfigPath())
 
         parser = argparse.ArgumentParser()
-        parser.add_argument("-b", "--background", action="store_true",
-                            help="Run non-interactively")
+        mode = parser.add_mutually_exclusive_group(required=False)
+        mode.add_argument("-b", "--background", action="store_true",
+                          help="Begin folder scans and uploads with "
+                               "previously saved settings, instead of "
+                               "prompting the user to confirm settings. "
+                               "Start with MyData minimized to system tray.")
+        mode.add_argument("-c", "--client", action="store_true",
+                          help="Connect to a MyData daemon process.  The "
+                               "client process is responsible for the GUI "
+                               "and the daemon process is responsible for "
+                               "the folder scans and data uploads.")
+        mode.add_argument("-d", "--daemon", action="store_true",
+                          help="Run a MyData daemon which can run as a "
+                               "service and be connected to by a MyData "
+                               "client GUI.  The daemon process can run as "
+                               "a service and persist beyond user login "
+                               "sessions.")
         parser.add_argument("-v", "--version", action="store_true",
                             help="Display MyData version and exit")
-        # parser.add_argument("--loglevel", help="set logging verbosity")
+        parser.add_argument("-l", "--loglevel", help="set logging verbosity")
         args, unknown = parser.parse_known_args()
         if args.version:
             print "MyData %s" % MyDataVersionNumber.versionNumber
             os._exit(0)
-        args, unknown = parser.parse_known_args()
         self.settingsModel.SetBackgroundMode(args.background)
 
-        # Using wx.SingleInstanceChecker to check whether MyData is already
-        # running.
-        # Running MyData --version is allowed when MyData is already running,
-        # in fact this is used by calls to ShellExecuteEx to test user
-        # privilege elevation on Windows.
-        # A workaround for the 'Deleted stale lock file' issue with
-        # SingleInstanceChecker on Mac OS X is to lower the wx logging level.
-        # MyData doesn't use wx.Log
-        wx.Log.SetLogLevel(wx.LOG_Error)
-        self.instance = wx.SingleInstanceChecker(self.name, path=appdirPath)
-        if self.instance.IsAnotherRunning():
-            wx.MessageBox("MyData is already running!", "MyData",
-                          wx.ICON_ERROR)
-            return False
+        if args.daemon or args.client:
+            self.memcacheClient = MemCache.MemCacheClient(['127.0.0.1:11211'],
+                                                          namespace="MyData_",
+                                                          debug=0)
+            self.memcacheDaemon = MemCache.MemCacheDaemon()
+        if args.daemon:
+            print "MyData Daemon %s (PID %d)" \
+                % (MyDataVersionNumber.versionNumber, os.getpid())
+            self.settingsModel.SetRunningAsDaemon(True)
+            logger.SetLogFileName(".MyData_daemon_debug_log.txt")
+            self.memcacheClient.set_namespace("%s_%d_"
+                                              % (self.name, os.getpid()))
+            from Daemon import Daemon
+            self.daemon = Daemon(self.name)
+            self.daemon.start()
+
+        if args.client:
+            print "MyData Client %s (PID %d)" \
+                % (MyDataVersionNumber.versionNumber, os.getpid())
+            self.settingsModel.SetRunningAsClient(True)
+            logger.SetLogFileName(".MyData_client_debug_log.txt")
+            logger.debug("Running MyData in client mode...")
+            logger.debug("Checking if MemCache Daemon is running...")
+            self.memcacheClient.set_namespace("%s_" % self.name)
+            pid = self.memcacheDaemon.GetPid()
+            if pid:
+                success = self.memcacheClient.set('test_key', 'test_value')
+                self.memcacheClient.delete('test_key')
+                if success:
+                    daemon_pid = self.memcacheClient.get("daemon_pid")
+                    if daemon_pid:
+                        daemon_pid = int(daemon_pid)
+                        from Util import PidIsRunning
+                        if not PidIsRunning(daemon_pid):
+                            print "\nERROR: The MyData daemon whose PID " \
+                                    "(%d) was found in MemCache is " \
+                                    "not running." % daemon_pid
+                            os._exit(1)
+                    else:
+                        raise Exception("Daemon PID was not found in "
+                                        "MemCache.")
+                    namespace = "%s_%d_" % (self.name, daemon_pid)
+                    self.memcacheClient.set_namespace("%s" % namespace)
+
+                    clients = self.memcacheClient.get("clients")
+                    if clients is not None:
+                        clients.append(os.getpid())
+                        self.memcacheClient.set("clients", clients)
+                        clients = self.memcacheClient.get("clients")
+                        from Client import Client
+                        self.client = Client(self.name, daemon_pid)
+                        self.client.start()
+                    else:
+                        raise Exception("Didn't find clients in namespace")
+                else:
+                    raise Exception("MyData can't write to MemCache Daemon.")
+            else:
+                raise Exception("MemCache Daemon is not running.")
+        else:
+            # Using wx.SingleInstanceChecker to check whether MyData is already
+            # running.
+            # Running MyData --version is allowed when MyData is already
+            # running, in fact this is used by calls to ShellExecuteEx to
+            # test user privilege elevation on Windows.
+            # A workaround for the 'Deleted stale lock file' issue with
+            # SingleInstanceChecker on Mac OS X is to lower the wx logging
+            # level.  MyData doesn't use wx.Log
+            wx.Log.SetLogLevel(wx.LOG_Error)
+            self.instance = wx.SingleInstanceChecker(self.name,
+                                                     path=appdirPath)
+            if self.instance.IsAnotherRunning():
+                wx.MessageBox("MyData is already running!", "MyData",
+                              wx.ICON_ERROR)
+                return False
+        if args.loglevel:
+            if args.loglevel == "DEBUG":
+                logger.SetLevel(logging.DEBUG)
+            elif args.loglevel == "INFO":
+                logger.SetLevel(logging.INFO)
+            elif args.loglevel == "WARN":
+                logger.SetLevel(logging.WARN)
+            elif args.loglevel == "ERROR":
+                logger.SetLevel(logging.ERROR)
 
         if sys.platform.startswith("darwin"):
             # On Mac OS X, adding an Edit menu seems to help with
@@ -213,8 +313,8 @@ class MyData(wx.App):
         self.foldersModel = FoldersModel(self.usersModel, self.groupsModel,
                                          self.settingsModel)
         self.usersModel.SetFoldersModel(self.foldersModel)
-        self.verificationsModel = VerificationsModel()
-        self.uploadsModel = UploadsModel()
+        self.verificationsModel = VerificationsModel(self.settingsModel)
+        self.uploadsModel = UploadsModel(self.settingsModel)
 
         self.frame = MyDataFrame(None, -1, self.name,
                                  style=wx.DEFAULT_FRAME_STYLE,
@@ -223,7 +323,10 @@ class MyData(wx.App):
             self.frame.SetMenuBar(self.menuBar)
         self.myDataEvents = mde.MyDataEvents(notifyWindow=self.frame)
 
-        self.onRefreshRunning = False
+        self.SetFolderScansAndUploadsRunning(False)
+        if self.settingsModel.RunningAsClient() or \
+                self.settingsModel.RunningAsDaemon():
+            self.memcacheClient.set("folderScansAndUploadsRunning", False)
 
         self.taskBarIcon = MyDataTaskBarIcon(self.frame, self.settingsModel)
 
@@ -300,21 +403,52 @@ class MyData(wx.App):
 
         self.SetTopWindow(self.frame)
 
-        self.frame.Show(True)
+        if not self.settingsModel.RunningAsDaemon():
+            # print "Showing main frame"
+            self.frame.Show(True)
+        else:
+            logger.debug("Running as a daemon, so not showing main frame")
 
         event = None
-        if self.settingsModel.RequiredFieldIsBlank():
-            self.OnSettings(event)
-        else:
-            self.frame.SetTitle("MyData - " +
-                                self.settingsModel.GetInstrumentName())
-            if self.settingsModel.RunningInBackgroundMode():
-                self.frame.Iconize()
-                self.OnRefresh(event)
-            else:
+        if not self.settingsModel.RunningAsDaemon():
+            logger.debug("Not running as a daemon, so checking whether we "
+                         "should display settings dialog.")
+            if self.settingsModel.RunningAsClient():
+                logger.debug("Running as a client, so we need to check what "
+                             "state the daemon is in to determine whether it "
+                             "is appropriate to display the settings dialog.")
+                folderScansAndUploadsRunning = \
+                    self.memcacheClient.get("folderScansAndUploadsRunning")
+                if folderScansAndUploadsRunning:
+                    logger.debug("Folder scans and uploads are already running"
+                                 "in the daemon, so we won't display MyData's "
+                                 "settings dialog.")
+                    return True
+                else:
+                    logger.debug("OnRefresh() is not running in the daemon, "
+                                 "so it's OK to display MyData's settings "
+                                 "dialog.")
+            self.progressDialog = \
+                MyDataProgressDialog(self.frame, wx.ID_ANY, userCanAbort=True)
+
+            if self.settingsModel.RequiredFieldIsBlank():
                 self.OnSettings(event)
+            else:
+                self.frame.SetTitle("MyData - " +
+                                    self.settingsModel.GetInstrumentName())
+                if self.settingsModel.RunningInBackgroundMode():
+                    self.frame.Iconize()
+                    self.OnRefresh(event)
+                else:
+                    self.OnSettings(event)
+        else:
+            logger.debug("Running as a daemon, so not showing "
+                         "settings dialog.")
 
         return True
+
+    def GetProgressDialog(self):
+        return self.progressDialog
 
     def OnUndo(self, event):
         print "OnUndo"
@@ -402,6 +536,23 @@ class MyData(wx.App):
                 logger.debug("Starting thread %s" % thread.name)
                 thread.start()
                 logger.debug("Started thread %s" % thread.name)
+
+    def ExitOnCriticalFailure(self, preamble=None, reason=None):
+        """
+        Used when MyData is running in --client mode and the connection is
+        lost to the MyData daemon or the MemCache daemon.
+
+        """
+        if preamble:
+            message = preamble
+        else:
+            message = "MyData must now exit, due to a critical failure."
+        if reason:
+            message = message + "\n\n" + reason
+        errorDialog = wx.MessageDialog(None, message, "MyData",
+                                       wx.OK | wx.ICON_ERROR)
+        errorDialog.ShowModal()
+        os._exit(1)
 
     def OnMinimizeFrame(self, event):
         """
@@ -528,18 +679,43 @@ class MyData(wx.App):
         elif self.foldersUsersNotebook.GetSelection() == NotebookTabs.UPLOADS:
             self.uploadsModel.Filter(event.GetString())
 
-    def OnRefreshIsRunning(self):
-        return self.onRefreshRunning
+    def FolderScansAndUploadsAreRunning(self):
+        return self.folderScansAndUploadsRunning
 
-    def SetOnRefreshRunning(self, onRefreshRunning):
-        self.onRefreshRunning = onRefreshRunning
+    def SetFolderScansAndUploadsRunning(self, folderScansAndUploadsRunning):
+        self.folderScansAndUploadsRunning = folderScansAndUploadsRunning
+        if self.settingsModel.RunningAsClient() or \
+                self.settingsModel.RunningAsDaemon():
+            self.memcacheClient.set("folderScansAndUploadsRunning",
+                                    folderScansAndUploadsRunning)
 
-    def OnRefresh(self, event, needToValidateSettings=True):
+    def OnRefresh(self, event, settingsModel=None,
+                  needToValidateSettings=True):
+        if self.settingsModel.RunningAsClient():
+            logger.debug("We should ask the daemon to run OnRefresh.")
+            max_job_id = self.memcacheClient.get("max_job_id")
+            if max_job_id is not None:
+                self.memcacheClient.incr("max_job_id")
+                job_id = int(self.memcacheClient.get("max_job_id"))
+                jobDict = {"methodName": "OnRefresh",
+                           "settingsModel": self.settingsModel,
+                           "requested": datetime.now(),
+                           }
+                self.memcacheClient.set("job_%d" % job_id, jobDict)
+                return
+            else:
+                raise Exception("Didn't find max_job_id in namespace %s"
+                                % self.memcacheClient.get_namespace())
         shutdownForRefreshAlreadyComplete = False
+        if settingsModel is None:
+            settingsModel = self.settingsModel
         if event is None:
-            if self.settingsModel.RunningInBackgroundMode():
+            if settingsModel.RunningInBackgroundMode():
                 logger.debug("OnRefresh called automatically "
                              "from MyData's OnInit().")
+            elif self.settingsModel.RunningAsDaemon():
+                logger.debug("OnRefresh called automatically "
+                             "from MyData's Daemon.py")
             else:
                 logger.debug("OnRefresh called automatically from "
                              "OnSettings(), after displaying SettingsDialog.")
@@ -576,7 +752,8 @@ class MyData(wx.App):
 
         # Shutting down existing data scan and upload processes:
 
-        if self.OnRefreshIsRunning() and not shutdownForRefreshAlreadyComplete:
+        if self.FolderScansAndUploadsAreRunning() and \
+                not shutdownForRefreshAlreadyComplete:
             message = \
                 "Shutting down existing data scan and upload processes..."
             logger.debug(message)
@@ -590,10 +767,9 @@ class MyData(wx.App):
             return
 
         # Reset the status message to the connection status:
-        self.frame.SetConnected(self.settingsModel.GetMyTardisUrl(),
+        self.frame.SetConnected(settingsModel.GetMyTardisUrl(),
                                 False)
         self.foldersController.SetShuttingDown(False)
-        self.SetOnRefreshRunning(True)
 
         self.searchCtrl.SetValue("")
 
@@ -610,8 +786,9 @@ class MyData(wx.App):
             logger.debug("Checking network connectivity...")
             checkConnectivityEvent = \
                 mde.MyDataEvent(mde.EVT_CHECK_CONNECTIVITY,
-                                settingsModel=self.settingsModel,
+                                settingsModel=settingsModel,
                                 nextEvent=settingsValidationForRefreshEvent)
+            logger.debug("Posting checkConnectivityEvent from OnRefresh...")
             wx.PostEvent(wx.GetApp().GetMainFrame(), checkConnectivityEvent)
             return
 
@@ -627,7 +804,7 @@ class MyData(wx.App):
                              % threading.current_thread().name)
                 try:
                     wx.CallAfter(wx.BeginBusyCursor)
-                    self.uploaderModel = self.settingsModel.GetUploaderModel()
+                    self.uploaderModel = settingsModel.GetUploaderModel()
                     activeNetworkInterfaces = \
                         self.uploaderModel.GetActiveNetworkInterfaces()
                     if len(activeNetworkInterfaces) == 0:
@@ -652,11 +829,11 @@ class MyData(wx.App):
                             wx.CallAfter(endBusyCursorIfRequired)
                             self.frame.SetStatusMessage("")
                             self.frame.SetConnected(
-                                self.settingsModel.GetMyTardisUrl(), False)
+                                settingsModel.GetMyTardisUrl(), False)
                         wx.CallAfter(showDialog)
                         return
 
-                    self.settingsValidation = self.settingsModel.Validate()
+                    self.settingsValidation = settingsModel.Validate()
                     settingsValidationForRefreshCompleteEvent = \
                         mde.MyDataEvent(
                             mde.EVT_SETTINGS_VALIDATION_FOR_REFRESH_COMPLETE,
@@ -695,56 +872,27 @@ class MyData(wx.App):
             self.OnSettings(event)
             return
 
-        if "Group" in self.settingsModel.GetFolderStructure():
+        if "Group" in settingsModel.GetFolderStructure():
             self.foldersView.ShowGroupColumn(True)
         else:
             self.foldersView.ShowGroupColumn(False)
 
         logger.debug("OnRefresh: Creating progress dialog.")
 
-        def cancelCallback():
-            def shutDownUploadThreads():
-                try:
-                    wx.CallAfter(wx.BeginBusyCursor)
-                    self.foldersController.ShutDownUploadThreads()
+        if not self.settingsModel.RunningAsDaemon():
+            self.progressDialog.Show()
 
-                    def endBusyCursorIfRequired():
-                        try:
-                            wx.EndBusyCursor()
-                        except wx._core.PyAssertionError, e:
-                            if "no matching wxBeginBusyCursor()" not in str(e):
-                                logger.error(str(e))
-                                raise
-                    wx.CallAfter(endBusyCursorIfRequired)
-                except:
-                    logger.error(traceback.format_exc())
-            thread = threading.Thread(target=shutDownUploadThreads)
-            thread.start()
-        self.progressDialog = \
-            MyDataProgressDialog(
-                self.frame,
-                wx.ID_ANY,
-                "",
-                "Scanning folders in " +
-                self.settingsModel.GetDataDirectory(),
-                self.usersModel.GetNumUserOrGroupFolders(),
-                userCanAbort=True, cancelCallback=cancelCallback)
+        self.SetTotalNumUserOrGroupFolders(self.usersModel
+                                           .GetNumUserOrGroupFolders())
 
-        self.numUserFoldersScanned = 0
-        self.keepGoing = True
-
-        def incrementProgressDialog():
-            self.numUserFoldersScanned = self.numUserFoldersScanned + 1
-            message = "Scanned %d of %d folders in %s" % (
-                self.numUserFoldersScanned,
-                self.usersModel.GetNumUserOrGroupFolders(),
-                self.settingsModel.GetDataDirectory())
-            self.keepGoing = \
-                self.progressDialog.Update(self.numUserFoldersScanned,
-                                           message)
+        if self.settingsModel.RunningAsDaemon():
+            logger.debug("Setting FolderScansAndUploadsRunning to True.")
+        self.SetFolderScansAndUploadsRunning(True)
 
         # SECTION 4: Start FoldersModel.Refresh(),
         # followed by FoldersController.StartDataUploads().
+
+        self.SetNumUserOrGroupFoldersScanned(0)
 
         def scanDataDirs():
             logger.debug("Starting run() method for thread %s"
@@ -752,13 +900,16 @@ class MyData(wx.App):
             wx.CallAfter(self.frame.SetStatusMessage,
                          "Scanning data folders...")
             try:
-                self.foldersModel.Refresh(incrementProgressDialog,
-                                          self.progressDialog.ShouldAbort)
+                if self.settingsModel.RunningAsDaemon():
+                    def ShouldAbort():
+                        return False
+                    self.foldersModel.Refresh(ShouldAbort)
+                else:
+                    self.foldersModel.Refresh(self.progressDialog.ShouldAbort)
             except InvalidFolderStructure, ifs:
                 # Should not be raised when running in background mode.
-                def closeProgressDialog():
-                    self.progressDialog.Show(False)
-                wx.CallAfter(closeProgressDialog)
+                if not self.settingsModel.RunningAsDaemon():
+                    wx.CallAfter(self.CloseProgressDialog)
 
                 def showMessageDialog():
                     dlg = wx.MessageDialog(None, str(ifs), "MyData",
@@ -768,9 +919,8 @@ class MyData(wx.App):
                 self.frame.SetStatusMessage(str(ifs))
                 return
 
-            def closeProgressDialog():
-                self.progressDialog.Show(False)
-            wx.CallAfter(closeProgressDialog)
+            if not self.settingsModel.RunningAsDaemon():
+                wx.CallAfter(self.CloseProgressDialog)
 
             def endBusyCursorIfRequired():
                 try:
@@ -780,7 +930,7 @@ class MyData(wx.App):
                         logger.error(str(e))
                         raise
 
-            if self.progressDialog.ShouldAbort():
+            if self.ShouldAbort():
                 wx.CallAfter(endBusyCursorIfRequired)
                 return
 
@@ -799,6 +949,92 @@ class MyData(wx.App):
         logger.debug("OnRefresh: Starting scanDataDirs thread.")
         thread.start()
         logger.debug("OnRefresh: Started scanDataDirs thread.")
+
+
+    def ShouldAbort(self):
+        if not self.settingsModel.RunningAsDaemon():
+            return self.progressDialog.ShouldAbort()
+        else:
+            return False
+
+    def CloseProgressDialog(self):
+        self.progressDialog.Show(False)
+
+    def IncrementProgressDialog(self, daemonEvent=None):
+        if daemonEvent:
+            for key in ['numUserOrGroupFoldersScanned',
+                        'totalNumUserOrGroupFolders']:
+                exec('%s = %d' % (key, daemonEvent[key]))
+            for key in ['dataDirectory',
+                        'message']:
+                exec('%s = "%s"' % (key,
+                                    daemonEvent[key].replace('"', '\\"')))
+        else:
+            numUserOrGroupFoldersScanned = \
+                self.IncrementNumUserOrGroupFoldersScanned()
+            totalNumUserOrGroupFolders = self.GetTotalNumUserOrGroupFolders()
+            dataDirectory = self.settingsModel.GetDataDirectory()
+            message = "Scanned %d of %d folders in %s" % (
+                numUserOrGroupFoldersScanned,
+                totalNumUserOrGroupFolders,
+                self.settingsModel.GetDataDirectory())
+        if self.settingsModel.RunningAsDaemon():
+            max_event_id = wx.GetApp().memcacheClient.get("max_event_id")
+            if max_event_id is not None:
+                wx.GetApp().memcacheClient.incr("max_event_id")
+                event_id = int(wx.GetApp().memcacheClient.get("max_event_id"))
+                daemonEvent = \
+                    {"eventType": "IncrementProgressDialog",
+                     "numUserOrGroupFoldersScanned": 
+                         numUserOrGroupFoldersScanned,
+                     "totalNumUserOrGroupFolders": totalNumUserOrGroupFolders,
+                     "dataDirectory": dataDirectory,
+                     "message": message}
+                wx.GetApp().memcacheClient.set("event_%d" % event_id,
+                                               daemonEvent)
+            else:
+                raise Exception("Didn't find max_event_id in namespace %s"
+                                % wx.GetApp().memcacheClient.get_namespace())
+
+        if not self.settingsModel.RunningAsDaemon():
+            self.progressDialog.Update(numUserOrGroupFoldersScanned,
+                                       message)
+
+    def CancelCallback(self):
+        def shutDownUploadThreads():
+            try:
+                wx.CallAfter(wx.BeginBusyCursor)
+                self.foldersController.ShutDownUploadThreads()
+
+                def endBusyCursorIfRequired():
+                    try:
+                        wx.EndBusyCursor()
+                    except wx._core.PyAssertionError, e:
+                        if "no matching wxBeginBusyCursor()" not in str(e):
+                            logger.error(str(e))
+                            raise
+                wx.CallAfter(endBusyCursorIfRequired)
+            except:
+                logger.error(traceback.format_exc())
+        thread = threading.Thread(target=shutDownUploadThreads)
+        thread.start()
+
+    def SetNumUserOrGroupFoldersScanned(self, numUserOrGroupFoldersScanned):
+        self.numUserOrGroupFoldersScanned = numUserOrGroupFoldersScanned
+
+    def GetNumUserOrGroupFoldersScanned(self):
+        return self.numUserOrGroupFoldersScanned
+
+    def IncrementNumUserOrGroupFoldersScanned(self):
+        self.numUserOrGroupFoldersScanned = \
+            self.numUserOrGroupFoldersScanned + 1
+        return self.numUserOrGroupFoldersScanned
+
+    def SetTotalNumUserOrGroupFolders(self, totalNumUserOrGroupFolders):
+        self.totalNumUserOrGroupFolders = totalNumUserOrGroupFolders
+
+    def GetTotalNumUserOrGroupFolders(self):
+        return self.totalNumUserOrGroupFolders
 
     def OnOpen(self, event):
         if self.foldersUsersNotebook.GetSelection() == NotebookTabs.FOLDERS:
@@ -827,7 +1063,22 @@ class MyData(wx.App):
                 self.frame.SetConnected(settingsDialog.GetMyTardisUrl(), False)
             self.frame.SetTitle("MyData - " +
                                 self.settingsModel.GetInstrumentName())
-            self.OnRefresh(event, needToValidateSettings=False)
+            if self.settingsModel.RunningAsClient():
+                logger.debug("Now we should ask the daemon to run OnRefresh.")
+                max_job_id = self.memcacheClient.get("max_job_id")
+                if max_job_id is not None:
+                    self.memcacheClient.incr("max_job_id")
+                    job_id = int(self.memcacheClient.get("max_job_id"))
+                    jobDict = {"methodName": "OnRefresh",
+                               "settingsModel": self.settingsModel,
+                               "requested": datetime.now(),
+                               }
+                    self.memcacheClient.set("job_%d" % job_id, jobDict)
+                else:
+                    raise Exception("Didn't find max_job_id in namespace %s"
+                                    % self.memcacheClient.get_namespace())
+            else:
+                self.OnRefresh(event, needToValidateSettings=False)
 
     def OnMyTardis(self, event):
         try:
