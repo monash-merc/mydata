@@ -60,25 +60,20 @@ class MyDataFrame(wx.Frame):
         self.statusbar.SetFieldsCount(2)
         self.SetStatusBar(self.statusbar)
         self.statusbar.SetStatusWidths([-1, 60])
-        if hasattr(sys, "frozen"):
-            if sys.platform.startswith("darwin"):
-                module_base_dir = ''
-            else:
-                module_base_dir = os.path.dirname(sys.executable)
-        else:
-            module_base_dir = os.path.dirname(os.path.realpath(__file__))
-        pngHotPath = os.path.join(module_base_dir, 'media', 'png-hot')
-        pngNormalPath = os.path.join(module_base_dir, 'media', 'png-normal')
+
+        module_base_dir = GetModuleBaseDir()
         if sys.platform.startswith("win"):
-            iconSubdir = "icons24x24"
+            icon_subdir = "24x24"
         else:
-            iconSubdir = "icons16x16"
+            icon_subdir = "16x16"
+
+        icon_path = os.path.join(module_base_dir, 'media', 'icons', icon_subdir)
+
         self.connectedBitmap = \
-            wx.Image(os.path.join(pngNormalPath, iconSubdir, "Connect.png"),
+            wx.Image(os.path.join(icon_path, "network-idle.png"),
                      wx.BITMAP_TYPE_PNG).ConvertToBitmap()
         self.disconnectedBitmap = \
-            wx.Image(os.path.join(pngNormalPath,
-                                  iconSubdir, "Disconnect.png"),
+            wx.Image(os.path.join(icon_path, "network-offline.png"),
                      wx.BITMAP_TYPE_PNG).ConvertToBitmap()
         self.connected = False
         self.SetConnected(settingsModel.GetMyTardisUrl(), False)
@@ -419,21 +414,13 @@ class MyData(wx.App):
         """
         Create a toolbar.
         """
-        if hasattr(sys, "frozen"):
-            if sys.platform.startswith("darwin"):
-                module_base_dir = ''
-            else:
-                module_base_dir = os.path.dirname(sys.executable)
-        else:
-            module_base_dir = os.path.dirname(os.path.realpath(__file__))
-        pngHotPath = os.path.join(module_base_dir, 'media', 'png-hot')
-        pngNormalPath = os.path.join(module_base_dir, 'media', 'png-normal')
+        module_base_dir = GetModuleBaseDir()
+        icon_path = os.path.join(module_base_dir, 'media', 'icons', "24x24")
 
         self.toolbar = self.frame.CreateToolBar()
         self.toolbar.SetToolBitmapSize(wx.Size(24, 24))  # sets icon size
 
-        openIcon = wx.Image(os.path.join(pngNormalPath,
-                                         "icons24x24", "Open folder.png"),
+        openIcon = wx.Image(os.path.join(icon_path, "document-open.png"),
                             wx.BITMAP_TYPE_PNG).ConvertToBitmap()
         openTool = self.toolbar.AddSimpleTool(wx.ID_ANY, openIcon, "Open",
                                               "Open folder")
@@ -441,8 +428,7 @@ class MyData(wx.App):
 
         self.toolbar.AddSeparator()
 
-        refreshIcon = wx.Image(os.path.join(pngNormalPath,
-                                            "icons24x24", "Refresh.png"),
+        refreshIcon = wx.Image(os.path.join(icon_path, "view-refresh.png"),
                                wx.BITMAP_TYPE_PNG).ConvertToBitmap()
         self.refreshTool = self.toolbar.AddSimpleTool(wx.ID_REFRESH,
                                                       refreshIcon,
@@ -453,8 +439,7 @@ class MyData(wx.App):
 
         self.toolbar.AddSeparator()
 
-        settingsIcon = wx.Image(os.path.join(pngHotPath,
-                                             "icons24x24", "Settings.png"),
+        settingsIcon = wx.Image(os.path.join(icon_path, "preferences-system.png"),
                                 wx.BITMAP_TYPE_PNG).ConvertToBitmap()
         self.settingsTool = self.toolbar.AddSimpleTool(wx.ID_ANY, settingsIcon,
                                                        "Settings", "")
@@ -463,8 +448,7 @@ class MyData(wx.App):
         self.toolbar.AddSeparator()
 
         internetIcon = \
-            wx.Image(os.path.join(pngNormalPath,
-                                  "icons24x24", "Internet explorer.png"),
+            wx.Image(os.path.join(icon_path, "internet-web-browser.png"),
                      wx.BITMAP_TYPE_PNG).ConvertToBitmap()
         self.myTardisTool = self.toolbar.AddSimpleTool(wx.ID_ANY, internetIcon,
                                                        "MyTardis", "")
@@ -472,8 +456,7 @@ class MyData(wx.App):
 
         self.toolbar.AddSeparator()
 
-        aboutIcon = wx.Image(os.path.join(pngHotPath,
-                                          "icons24x24", "About.png"),
+        aboutIcon = wx.Image(os.path.join(icon_path, "emblem-notice.png"),
                              wx.BITMAP_TYPE_PNG).ConvertToBitmap()
         self.aboutTool = self.toolbar.AddSimpleTool(wx.ID_ANY, aboutIcon,
                                                     "About MyData", "")
@@ -481,8 +464,7 @@ class MyData(wx.App):
 
         self.toolbar.AddSeparator()
 
-        helpIcon = wx.Image(os.path.join(pngHotPath,
-                                         "icons24x24", "Help.png"),
+        helpIcon = wx.Image(os.path.join(icon_path, "help-browser.png"),
                             wx.BITMAP_TYPE_PNG).ConvertToBitmap()
         self.helpTool = self.toolbar.AddSimpleTool(wx.ID_ANY, helpIcon,
                                                    "MyData User Guide", "")
@@ -897,6 +879,19 @@ class MyData(wx.App):
 
     def SetConfigPath(self, configPath):
         self.configPath = configPath
+
+
+def GetModuleBaseDir():
+    module_base_dir = ''
+    if hasattr(sys, "frozen"):
+        if sys.platform.startswith("darwin"):
+            module_base_dir = ''
+        else:
+            module_base_dir = os.path.dirname(sys.executable)
+    else:
+        module_base_dir = os.path.dirname(os.path.realpath(__file__))
+
+    return module_base_dir
 
 
 def main(argv):
