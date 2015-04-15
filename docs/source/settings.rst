@@ -102,8 +102,9 @@ Schedule
     will be placed in the current user's Startup folder.  The exact location
     varies, but on my machine it is
     "C:\\Users\\wettenhj\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup".
-    This is not implemented on Mac OS X yet, by a launch agent can be created
-    for MyData in the user's ~/Library/LaunchAgents/ folder.
+    This is not implemented on Mac OS X yet, but a launch agent can be created
+    for MyData in the user's ~/Library/LaunchAgents/ folder, or a login item
+    could be created in the user's ~/Library/Preferences/com.apple.loginitems.plist
 
 **Schedule type - On system startup**
     If MyData is installed as a service (not yet possible), then upon selecting
