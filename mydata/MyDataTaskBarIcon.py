@@ -12,7 +12,7 @@ class MyDataTaskBarIcon(wx.TaskBarIcon):
         self.settingsModel = settingsModel
 
         # img = wx.Image("icon_048.png", wx.BITMAP_TYPE_ANY)
-        img = wx.Image("favicon.ico", wx.BITMAP_TYPE_ANY)
+        img = wx.Image("media/favicon.ico", wx.BITMAP_TYPE_ANY)
         bmp = wx.BitmapFromImage(img)
         self.icon = wx.EmptyIcon()
         self.icon.CopyFromBitmap(bmp)
@@ -101,7 +101,7 @@ class MyDataTaskBarIcon(wx.TaskBarIcon):
         if okToExit == wx.ID_YES:
             if not self.settingsModel.RunningInBackgroundMode():
                 os._exit(0)
-            cmd = "Exit MyData.exe"
+            cmd = "MyData.exe --version"
             if sys.platform.startswith("win"):
                 import win32com.shell.shell as shell
                 shell.ShellExecuteEx(lpVerb='runas', lpFile=cmd,
