@@ -1091,8 +1091,7 @@ class UploadDatafileRunnable():
                              "before it began uploading." %
                              self.uploadModel.GetRelativePathToUpload())
                 return
-        if self.foldersController.uploadMethod == UploadMethod.HTTP_POST or \
-                not self.existingUnverifiedDatafile:
+        if self.foldersController.uploadMethod == UploadMethod.HTTP_POST:
             self.uploadModel.SetMessage("Initializing buffered reader...")
             datafileBufferedReader = io.open(dataFilePath, 'rb')
             self.uploadModel.SetBufferedReader(datafileBufferedReader)
@@ -1456,3 +1455,8 @@ class UploadDatafileRunnable():
                     folderModel=self.folderModel,
                     dataFileIndex=self.dataFileIndex,
                     uploadModel=self.uploadModel))
+        if self.foldersController.uploadMethod == UploadMethod.HTTP_POST:
+            try:
+                self.uploadModel.GetBufferedReader().close()
+            except:
+                logger.error(traceback.format_exc())
