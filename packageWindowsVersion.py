@@ -16,16 +16,16 @@ if os.path.exists("dist"):
     os.system("del /Q dist\\*.*")
 
 os.system("C:\\Python27\\python.exe .\\pyinstaller\\pyinstaller.py "
-          "--icon=MyData.ico --windowed MyData.py")
+          "--icon=mydata\\media\\MyData.ico --windowed mydata/MyData.py")
 
 # favicon.ico and MyData.ico are really the same thing - favicon.ico
 # is the original from the MyTardis repository, and MyData.ico is the
 # result of converting it to PNG and then back to ICO, which fixed a
 # problem with the Windows build.
-os.system("copy /Y favicon.ico dist\\MyData\\")
-os.system("copy /Y MyData.ico dist\\MyData\\")
-distutils.dir_util.copy_tree(r"png-normal", r"dist\MyData\png-normal")
-distutils.dir_util.copy_tree(r"png-hot", r"dist\MyData\png-hot")
+os.system("copy /Y mydata\\media\\favicon.ico dist\\MyData\\")
+os.system("copy /Y mydata\\media\\MyData.ico dist\\MyData\\")
+distutils.dir_util.copy_tree(r"mydata/media/png-normal", r"dist\MyData\mydata\media\png-normal")
+distutils.dir_util.copy_tree(r"mydata/media/png-hot", r"dist\MyData\mydata\media\png-hot")
 
 distutils.dir_util.copy_tree(r"openssh-5.4p1-1-msys-1.0.13",
                              r"dist\MyData\openssh-5.4p1-1-msys-1.0.13")
