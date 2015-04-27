@@ -296,8 +296,7 @@ class MyDataEvent(wx.PyCommandEvent):
                             raise
                 wx.CallAfter(endBusyCursorIfRequired)
 
-                def showDialog():
-                    message = str(e)
+                def showDialog(message):
                     logger.error(message)
                     try:
                         wx.EndBusyCursor()
@@ -309,7 +308,8 @@ class MyDataEvent(wx.PyCommandEvent):
                     dlg = wx.MessageDialog(None, message, "MyData",
                                            wx.OK | wx.ICON_ERROR)
                     dlg.ShowModal()
-                wx.CallAfter(showDialog)
+                message = str(e)
+                wx.CallAfter(showDialog, message)
             finally:
                 event.settingsDialog.okButton.Enable()
             logger.debug("Finished running tempSettingsModel.Validate() 4")
