@@ -182,7 +182,7 @@ class SettingsModel():
         return self.mytardis_url
 
     def SetMyTardisUrl(self, myTardisUrl):
-        self.mytardis_url = myTardisUrl
+        self.mytardis_url = myTardisUrl.rstrip('/')
 
     def GetUsername(self):
         return self.username
