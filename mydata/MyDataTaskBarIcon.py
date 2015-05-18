@@ -11,7 +11,6 @@ class MyDataTaskBarIcon(wx.TaskBarIcon):
         self.frame = frame
         self.settingsModel = settingsModel
 
-        # img = wx.Image("icon_048.png", wx.BITMAP_TYPE_ANY)
         img = wx.Image("media/favicon.ico", wx.BITMAP_TYPE_ANY)
         bmp = wx.BitmapFromImage(img)
         self.icon = wx.EmptyIcon()

@@ -18,6 +18,8 @@ from logger.Logger import logger
 #
 # Our data is stored in a list of UploadModel objects.
 
+import os
+
 
 class ColumnType:
     TEXT = 0
@@ -56,11 +58,14 @@ class UploadsModel(wx.dataview.PyDataViewIndexListModel):
         # largest ID, we don't decrement the maximum ID.
         self.maxDataViewId = 0
 
-        self.inProgressIcon = wx.Image('media/png-normal/icons16x16/Refresh.png',
+        from MyData import GetModuleBaseDir
+        module_base_dir = GetModuleBaseDir()
+        icon_path = os.path.join(module_base_dir, 'media', 'icons', "16x16")
+        self.inProgressIcon = wx.Image(os.path.join(icon_path, 'view-refresh.png'),
                                        wx.BITMAP_TYPE_PNG).ConvertToBitmap()
-        self.completedIcon = wx.Image('media/png-normal/icons16x16/Apply.png',
+        self.completedIcon = wx.Image(os.path.join(icon_path, 'emblem-success.png'),
                                       wx.BITMAP_TYPE_PNG).ConvertToBitmap()
-        self.failedIcon = wx.Image('media/png-normal/icons16x16/Delete.png',
+        self.failedIcon = wx.Image(os.path.join(icon_path, 'emblem-important.png'),
                                    wx.BITMAP_TYPE_PNG).ConvertToBitmap()
 
     def Filter(self, searchString):
