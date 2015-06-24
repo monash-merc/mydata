@@ -534,6 +534,10 @@ class FoldersController():
             wx.PostEvent(self.notifyWindow,
                          self.ShutdownUploadsEvent(completed=True))
 
+        wx.GetApp().UpdateVerificationsProgressDialog()
+        wx.GetApp().UpdateUploadsProgressDialog()
+
+
     def ShutDownUploadThreads(self, event=None):
         if self.IsShuttingDown():
             return

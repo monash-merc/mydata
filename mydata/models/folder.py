@@ -10,7 +10,6 @@ from mydata.logs import logger
 
 
 class FolderModel():
-
     def __init__(self, dataViewId, folder, location, userFolderName,
                  owner, foldersModel, usersModel, settingsModel):
         self.dataViewId = dataViewId

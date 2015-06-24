@@ -1,4 +1,5 @@
 import sys
+import time
 import wx
 import wx.aui
 import webbrowser
@@ -694,6 +695,14 @@ class MyData(wx.App):
         logger.debug("OnRefresh: Creating progress dialog.")
 
         def cancelCallback():
+            def closeProgressDialog():
+                self.progressDialog.Show(False)
+                # wxMac seems to work better with Destroy here,
+                # otherwise sometimes the dialog lingers.
+                if sys.platform.startswith("darwin"):
+                    self.progressDialog.Destroy()
+                    self.progressDialog = None
+            wx.CallAfter(closeProgressDialog)
             def shutDownUploadThreads():
                 try:
                     wx.CallAfter(wx.BeginBusyCursor)
@@ -715,24 +724,21 @@ class MyData(wx.App):
             MyDataProgressDialog(
                 self.frame,
                 wx.ID_ANY,
-                "",
+                "MyData Progress",
                 "Scanning folders in " +
                 self.settingsModel.GetDataDirectory(),
                 self.usersModel.GetNumUserOrGroupFolders(),
                 userCanAbort=True, cancelCallback=cancelCallback)
 
         self.numUserFoldersScanned = 0
-        self.keepGoing = True
 
-        def incrementProgressDialog():
+        def incrementUserFoldersGauge():
             self.numUserFoldersScanned = self.numUserFoldersScanned + 1
-            message = "Scanned %d of %d folders in %s" % (
+            message = "Scanned %d of %d user folders" % (
                 self.numUserFoldersScanned,
-                self.usersModel.GetNumUserOrGroupFolders(),
-                self.settingsModel.GetDataDirectory())
-            self.keepGoing = \
-                self.progressDialog.Update(self.numUserFoldersScanned,
-                                           message)
+                self.usersModel.GetNumUserOrGroupFolders())
+            self.progressDialog\
+                .UpdateUserFoldersGauge(self.numUserFoldersScanned, message)
 
         # SECTION 4: Start FoldersModel.Refresh(),
         # followed by FoldersController.StartDataUploads().
@@ -743,7 +749,7 @@ class MyData(wx.App):
             wx.CallAfter(self.frame.SetStatusMessage,
                          "Scanning data folders...")
             try:
-                self.foldersModel.Refresh(incrementProgressDialog,
+                self.foldersModel.Refresh(incrementUserFoldersGauge,
                                           self.progressDialog.ShouldAbort)
             except InvalidFolderStructure, ifs:
                 # Should not be raised when running in background mode.
@@ -763,6 +769,8 @@ class MyData(wx.App):
                 self.frame.SetStatusMessage(str(ifs))
                 return
 
+            """
+            Not closing progress dialog now until the grand shutdown.
             def closeProgressDialog():
                 self.progressDialog.Show(False)
                 # wxMac seems to work better with Destroy here,
@@ -770,6 +778,15 @@ class MyData(wx.App):
                 if sys.platform.startswith("darwin"):
                     self.progressDialog.Destroy()
             wx.CallAfter(closeProgressDialog)
+            """
+
+            def startVerificationsProgressDialog():
+                total = self.foldersModel.GetTotalNumFiles()
+                self.progressDialog.SetVerificationsRange(total)
+                self.progressDialog.UpdateVerificationsGauge(0,
+                    "Verified 0 of %d files..."
+                    % total)
+            wx.CallAfter(startVerificationsProgressDialog)
 
             def endBusyCursorIfRequired():
                 try:
@@ -804,6 +821,25 @@ class MyData(wx.App):
         logger.debug("OnRefresh: Starting scanDataDirs thread.")
         thread.start()
         logger.debug("OnRefresh: Started scanDataDirs thread.")
+
+    def UpdateVerificationsProgressDialog(self):
+        if not self.progressDialog:
+            return
+        total = self.foldersModel.GetTotalNumFiles()
+        numVerificationsCompleted = self.verificationsModel.GetCompletedCount()
+        message = "Verified %d of %d files..." \
+            % (numVerificationsCompleted, total)
+        self.progressDialog.UpdateVerificationsGauge(numVerificationsCompleted, message)
+
+    def UpdateUploadsProgressDialog(self):
+        if not self.progressDialog:
+            return
+        total = self.uploadsModel.GetRowCount()
+        numUploadsCompleted = self.uploadsModel.GetCompletedCount()
+        message = "Uploaded %d of %d files..." \
+            % (numUploadsCompleted, total)
+        self.progressDialog.SetUploadsRange(total)
+        self.progressDialog.UpdateUploadsGauge(numUploadsCompleted, message)
 
     def OnStop(self, event):
         self.uploadsView.OnCancelRemainingUploads(event)

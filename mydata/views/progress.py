@@ -45,41 +45,64 @@ from mydata.logs import logger
 
 
 class MyDataProgressDialog(wx.Frame):
-
-    def __init__(self, parent, id, title, message, maxValue, userCanAbort,
-                 cancelCallback=None):
+    def __init__(self, parent, id, title, initialUserFoldersMessage, maxValue,
+                 userCanAbort, cancelCallback=None):
         wx.Frame.__init__(self, parent, id, title,
                           style=wx.DEFAULT_DIALOG_STYLE
                           | wx.FRAME_FLOAT_ON_PARENT)
-
         self.userRequestedAbort = False
         self.cancelCallback = cancelCallback
-
         self.panel = wx.Panel(self, wx.ID_ANY)
-        self.messageStaticText = wx.StaticText(self.panel, label=message)
+        self.userFoldersMessageLabel = \
+            wx.StaticText(self.panel,label=initialUserFoldersMessage)
+        self.userFoldersGauge = wx.Gauge(self, -1, maxValue)
 
-        self.progressBar = wx.Gauge(self, -1, maxValue)
-
-        statusMessageWidth = self.messageStaticText.GetSize().width
+        statusMessageWidth = self.userFoldersMessageLabel.GetSize().width
         statusMessageWidth = max(statusMessageWidth, 300)
-        self.messageStaticText.SetMinSize(wx.Size(statusMessageWidth, -1))
-        self.progressBar.SetSize(wx.Size(statusMessageWidth, -1))
+        self.userFoldersMessageLabel.SetMinSize(wx.Size(statusMessageWidth, -1))
+        self.userFoldersGauge.SetSize(wx.Size(statusMessageWidth, -1))
 
         if userCanAbort:
-            sizer = wx.FlexGridSizer(rows=3, cols=3, vgap=5, hgap=15)
+            sizer = wx.FlexGridSizer(rows=7, cols=3, vgap=5, hgap=15)
         else:
-            sizer = wx.FlexGridSizer(rows=2, cols=3, vgap=5, hgap=15)
+            sizer = wx.FlexGridSizer(rows=6, cols=3, vgap=5, hgap=15)
 
         sizer.AddGrowableCol(1)
 
         sizer.Add(wx.StaticText(self.panel, wx.ID_ANY, " "))
-        sizer.Add(self.messageStaticText,
+        sizer.Add(self.userFoldersMessageLabel,
                   flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP | wx.BOTTOM,
                   border=15)
         sizer.Add(wx.StaticText(self.panel, wx.ID_ANY, " "))
 
         sizer.Add(wx.StaticText(self.panel, wx.ID_ANY, " "))
-        sizer.Add(self.progressBar,
+        sizer.Add(self.userFoldersGauge,
+                  flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, border=15)
+        sizer.Add(wx.StaticText(self.panel, wx.ID_ANY, " "))
+
+        self.verificationsMessageLabel = wx.StaticText(self.panel, label="")
+        self.verificationsGauge = wx.Gauge(self, -1, maxValue)
+        sizer.Add(wx.StaticText(self.panel, wx.ID_ANY, " "))
+        sizer.Add(self.verificationsMessageLabel,
+                  flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP | wx.BOTTOM,
+                  border=15)
+        sizer.Add(wx.StaticText(self.panel, wx.ID_ANY, " "))
+
+        sizer.Add(wx.StaticText(self.panel, wx.ID_ANY, " "))
+        sizer.Add(self.verificationsGauge,
+                  flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, border=15)
+        sizer.Add(wx.StaticText(self.panel, wx.ID_ANY, " "))
+
+        self.uploadsMessageLabel = wx.StaticText(self.panel, label="")
+        self.uploadsGauge = wx.Gauge(self, -1, maxValue)
+        sizer.Add(wx.StaticText(self.panel, wx.ID_ANY, " "))
+        sizer.Add(self.uploadsMessageLabel,
+                  flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP | wx.BOTTOM,
+                  border=15)
+        sizer.Add(wx.StaticText(self.panel, wx.ID_ANY, " "))
+
+        sizer.Add(wx.StaticText(self.panel, wx.ID_ANY, " "))
+        sizer.Add(self.uploadsGauge,
                   flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, border=15)
         sizer.Add(wx.StaticText(self.panel, wx.ID_ANY, " "))
 
@@ -98,14 +121,11 @@ class MyDataProgressDialog(wx.Frame):
 
         self.panel.SetSizerAndFit(sizer)
         self.Fit()
-        self.messageStaticText.SetLabel(message)
+        self.userFoldersMessageLabel.SetLabel(initialUserFoldersMessage)
         self.Center()
         self.Show()
 
         return None
-
-    def getProgress(self):
-        return self.progressBar.GetValue()
 
     def ShouldAbort(self):
         return self.userRequestedAbort
@@ -115,7 +135,7 @@ class MyDataProgressDialog(wx.Frame):
                      "even though userCanAbort is False.")
 
     def OnCancel(self, event):
-        self.messageStaticText.SetLabel("Aborting...")
+        self.userFoldersMessageLabel.SetLabel("Aborting...")
         self.userRequestedAbort = True
         self.cancelButton.Enable(False)
         if self.cancelCallback is not None:
@@ -124,8 +144,29 @@ class MyDataProgressDialog(wx.Frame):
     def SetCancelCallback(self, callback):
         self.cancelCallback = callback
 
-    def Update(self, value, message):
+    def UpdateUserFoldersGauge(self, value, message):
         if self.userRequestedAbort:
             return
-        self.progressBar.SetValue(value)
-        self.messageStaticText.SetLabel(message)
+        self.userFoldersGauge.SetValue(value)
+        self.userFoldersMessageLabel.SetLabel(message)
+
+    def UpdateVerificationsGauge(self, value, message):
+        if self.userRequestedAbort:
+            return
+        self.verificationsGauge.SetValue(value)
+        self.verificationsMessageLabel.SetLabel(message)
+
+    def UpdateUploadsGauge(self, value, message):
+        if self.userRequestedAbort:
+            return
+        self.uploadsGauge.SetValue(value)
+        self.uploadsMessageLabel.SetLabel(message)
+
+    def SetUserFoldersRange(self, maxValue):
+        self.userFoldersGauge.SetRange(maxValue)
+
+    def SetVerificationsRange(self, maxValue):
+        self.verificationsGauge.SetRange(maxValue)
+
+    def SetUploadsRange(self, maxValue):
+        self.uploadsGauge.SetRange(maxValue)
