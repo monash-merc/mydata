@@ -3,5 +3,4 @@ MyData
 
 Desktop application for uploading data to MyTardis
 
-See: 
-* [MyData Documentation @ Read the Docs](http://mydata.readthedocs.org/en/latest/)
+The latest version of this repository is available at: https://github.com/mytardis/mydata
