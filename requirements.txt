@@ -2,7 +2,7 @@ altgraph==0.16.1
 appdirs==1.4.3
 # apscheduler==2.1.2
 macholib==1.11
-modulegraph==0.12
+modulegraph==0.17
 poster==0.8.1
 psutil==2.2.1
 # py2app==0.9
