@@ -7,7 +7,7 @@ poster==0.8.1
 psutil==5.4.8
 # py2app==0.9
 requests==2.20.0
-validate-email==1.2
+validate-email==1.3
 wsgiref==0.1.2
 # wxPython==3.0.2.0
 # wxPython-common==3.0.2.0
