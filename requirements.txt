@@ -1,4 +1,4 @@
-altgraph==0.12
+altgraph==0.17
 appdirs==1.4.0
 # apscheduler==2.1.2
 macholib==1.7
